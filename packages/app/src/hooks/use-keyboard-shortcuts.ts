@@ -261,6 +261,7 @@ export function useKeyboardShortcuts({
         action: result.match.action,
         payload: result.match.payload,
         domEvent: input.domEvent,
+        browserFocusRestoreElement: input.browserFocusRestoreElement,
       });
       if (!handled || !input.domEvent) {
         return;
