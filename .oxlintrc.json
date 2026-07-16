@@ -276,6 +276,14 @@
         "no-restricted-imports": "off"
       }
     },
+    // raw-query burn-down (grok account hooks): pre-existing hooks kept on
+    // plain useQuery; not yet migrated to useReplicaQuery/useFetchQuery.
+    {
+      "files": ["packages/app/src/provider-usage/grok-accounts/use-grok-accounts.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
     {
       "files": ["**/e2e/fixtures.ts"],
       "rules": {

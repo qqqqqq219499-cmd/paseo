@@ -55,6 +55,7 @@ import {
 } from "@/runtime/host-runtime";
 import { ProvidersSection } from "@/screens/settings/providers-section";
 import { ProviderUsageSettingsSection } from "@/provider-usage/settings-section";
+import { GrokAccountsSection } from "@/provider-usage/grok-accounts/grok-accounts-section";
 import { useProviderUsage } from "@/provider-usage/use-provider-usage";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { useSessionStore } from "@/stores/session-store";
@@ -336,6 +337,7 @@ export function HostUsagePage({ serverId }: { serverId: string }) {
   return (
     <View>
       <ProviderUsageSettingsSection view={providerUsageView} onRefresh={handleRefresh} />
+      <GrokAccountsSection serverId={serverId} />
     </View>
   );
 }
