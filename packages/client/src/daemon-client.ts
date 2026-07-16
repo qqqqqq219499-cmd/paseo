@@ -73,6 +73,11 @@ import type {
   RefreshProvidersSnapshotResponseMessage,
   ProviderDiagnosticResponseMessage,
   ProviderUsageListResponseMessage,
+  GrokListAccountsResponseMessage,
+  GrokStartLoginResponseMessage,
+  GrokCancelLoginResponseMessage,
+  GrokSwitchAccountResponseMessage,
+  GrokRemoveAccountResponseMessage,
   DaemonGetStatusResponse,
   DaemonGetPairingOfferResponse,
   DiagnosticsResponse,
@@ -410,6 +415,11 @@ type GetProvidersSnapshotPayload = GetProvidersSnapshotResponseMessage["payload"
 type RefreshProvidersSnapshotPayload = RefreshProvidersSnapshotResponseMessage["payload"];
 type ProviderDiagnosticPayload = ProviderDiagnosticResponseMessage["payload"];
 type ProviderUsageListPayload = ProviderUsageListResponseMessage["payload"];
+type GrokListAccountsPayload = GrokListAccountsResponseMessage["payload"];
+type GrokStartLoginPayload = GrokStartLoginResponseMessage["payload"];
+type GrokCancelLoginPayload = GrokCancelLoginResponseMessage["payload"];
+type GrokSwitchAccountPayload = GrokSwitchAccountResponseMessage["payload"];
+type GrokRemoveAccountPayload = GrokRemoveAccountResponseMessage["payload"];
 type DaemonStatusPayload = DaemonGetStatusResponse["payload"];
 type DaemonPairingOfferPayload = DaemonGetPairingOfferResponse["payload"];
 type DiagnosticsPayload = DiagnosticsResponse["payload"];
@@ -4230,6 +4240,82 @@ export class DaemonClient {
       message: {
         type: "provider.usage.list.request",
       },
+    });
+  }
+
+  // Grok Build multi-account RPCs. The push broadcast provider.grok.changed is
+  // consumed separately via the generic on("provider.grok.changed", ...) subscription.
+  async grokListAccounts(options?: {
+    refreshQuota?: boolean;
+    requestId?: string;
+  }): Promise<GrokListAccountsPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.grok.list_accounts.request",
+        ...(options?.refreshQuota === true ? { refreshQuota: true } : {}),
+      },
+      timeout: 30000,
+    });
+  }
+
+  async grokStartLogin(options?: {
+    mode?: "oauth" | "device-auth";
+    requestId?: string;
+  }): Promise<GrokStartLoginPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.grok.start_login.request",
+        ...(options?.mode ? { mode: options.mode } : {}),
+      },
+      timeout: 30000,
+    });
+  }
+
+  async grokCancelLogin(params: {
+    loginId: string;
+    requestId?: string;
+  }): Promise<GrokCancelLoginPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: params.requestId,
+      message: {
+        type: "provider.grok.cancel_login.request",
+        loginId: params.loginId,
+      },
+      timeout: 30000,
+    });
+  }
+
+  async grokSwitchAccount(params: {
+    accountId: string;
+    force?: boolean;
+    requestId?: string;
+  }): Promise<GrokSwitchAccountPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: params.requestId,
+      message: {
+        type: "provider.grok.switch_account.request",
+        accountId: params.accountId,
+        ...(params.force === true ? { force: true } : {}),
+      },
+      timeout: 30000,
+    });
+  }
+
+  async grokRemoveAccount(params: {
+    accountId: string;
+    force?: boolean;
+    requestId?: string;
+  }): Promise<GrokRemoveAccountPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: params.requestId,
+      message: {
+        type: "provider.grok.remove_account.request",
+        accountId: params.accountId,
+        ...(params.force === true ? { force: true } : {}),
+      },
+      timeout: 30000,
     });
   }
 
