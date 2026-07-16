@@ -2,42 +2,26 @@ import { existsSync, promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Logger } from "pino";
-import { z } from "zod";
 import type { ProviderUsage, ProviderUsageBalance } from "../../../server/messages.js";
-import type { ProviderApiFetch, ProviderUsageFetcher } from "../provider.js";
 import {
-  ApiNumberSchema,
-  balanceToneFromRemaining,
-  fetchProviderApi,
-  unavailableUsage,
-} from "../usage.js";
-
-const GrokUsageResponseSchema = z.object({
-  config: z
-    .object({
-      monthlyLimit: z
-        .object({
-          val: ApiNumberSchema.optional(),
-        })
-        .nullish(),
-    })
-    .nullish(),
-  usage: z
-    .object({
-      creditUsage: ApiNumberSchema.optional(),
-    })
-    .nullish(),
-});
-
-const GrokAuthSchema = z.object({
-  access_token: z.string().optional(),
-});
+  extractBearerToken,
+  parseGrokAuthFile,
+  resolveGrokHome,
+} from "../../grok/grok-auth-file.js";
+import { fetchGrokBilling, GrokBillingError } from "../../grok/grok-billing.js";
+import type { ProviderApiFetch, ProviderUsageFetcher } from "../provider.js";
+import { balanceToneFromRemaining, unavailableUsage } from "../usage.js";
 
 interface GrokQuotaProviderOptions {
   logger: Logger;
   fetch?: ProviderApiFetch;
 }
 
+// Live usage card for the ACTIVE grok account (feeds `provider.usage.list`).
+// Reads the daemon-resolved live auth file through the shared codec and the
+// shared billing reader — the same home rule and credential shape the account
+// switcher uses. Per-account quota for parked accounts lives in the account
+// service (Step 5); this reader only ever reflects whoever is currently active.
 export class GrokQuotaProvider implements ProviderUsageFetcher {
   readonly providerId = "grok";
   readonly displayName = "Grok";
@@ -51,31 +35,24 @@ export class GrokQuotaProvider implements ProviderUsageFetcher {
   }
 
   async fetchUsage(): Promise<ProviderUsage> {
+    // Precedence unchanged: explicit env keys win over the live auth file.
     const token =
       process.env["GROK_API_KEY"] || process.env["GROK_TOKEN"] || (await this.readGrokToken());
 
     if (!token) return unavailableUsage(this);
 
-    const res = await fetchProviderApi(
-      this.fetchApi,
-      "https://cli-chat-proxy.grok.com/v1/billing",
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "X-XAI-Token-Auth": "xai-grok-cli",
-          Accept: "application/json",
-        },
-      },
-    );
-
-    if (!res.ok) {
-      this.logger.debug({ status: res.status }, "Grok usage fetch failed");
-      return unavailableUsage(this);
+    let billing;
+    try {
+      billing = await fetchGrokBilling(this.fetchApi, token);
+    } catch (error) {
+      if (error instanceof GrokBillingError) {
+        this.logger.debug({ status: error.status }, "Grok usage fetch failed");
+        return unavailableUsage(this);
+      }
+      throw error;
     }
 
-    const resp = GrokUsageResponseSchema.parse(await res.json());
-    const monthlyLimit = resp.config?.monthlyLimit?.val ?? null;
-    const creditUsage = resp.usage?.creditUsage ?? null;
+    const { monthlyLimit, creditUsage } = billing;
     const balances: ProviderUsageBalance[] = [];
     if (monthlyLimit !== null || creditUsage !== null) {
       const remaining =
@@ -105,12 +82,15 @@ export class GrokQuotaProvider implements ProviderUsageFetcher {
     };
   }
 
+  // Bearer token of the active account from the daemon-resolved grok home
+  // (`resolveGrokHome`: GROK_HOME or ~/.grok). Modern issuer-keyed files resolve
+  // the active entry's `key` through the shared codec; a legacy top-level
+  // `access_token` file still works via the codec's legacy branch.
   private async readGrokToken(): Promise<string | null> {
-    const path = join(homedir(), ".grok", "auth.json");
+    const path = join(resolveGrokHome(process.env, homedir), "auth.json");
     if (!existsSync(path)) return null;
     try {
-      const auth = GrokAuthSchema.parse(JSON.parse(await fs.readFile(path, "utf8")));
-      return auth.access_token ?? null;
+      return extractBearerToken(parseGrokAuthFile(await fs.readFile(path, "utf8")));
     } catch {
       return null;
     }

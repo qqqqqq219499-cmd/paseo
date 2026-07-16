@@ -398,6 +398,7 @@ export type AgentStreamEvent =
       provider: AgentProvider;
       error: string;
       code?: string;
+      httpStatus?: number;
       diagnostic?: string;
       turnId?: string;
     }

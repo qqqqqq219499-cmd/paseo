@@ -3,12 +3,14 @@ import { z } from "zod";
 
 import type { AgentCapabilityFlags } from "../agent-sdk-types.js";
 import { checkProviderLaunchAvailable, resolveProviderLaunch } from "../provider-launch-config.js";
+import type { AgentMode } from "../agent-sdk-types.js";
 import {
   ACPAgentClient,
   type ACPClientCapabilityMeta,
   type ACPConfigFeatureOption,
   DEFAULT_ACP_CAPABILITIES,
   type ACPExtensionCommandsParser,
+  type SessionStateResponse,
 } from "./acp-agent.js";
 import {
   buildBinaryDiagnosticRows,
@@ -40,6 +42,8 @@ interface GenericACPAgentClientOptions {
   logger: Logger;
   command: [string, ...string[]];
   env?: Record<string, string>;
+  /** Provider id reported to the runtime (timeline/persistence). Defaults to "acp". */
+  provider?: string;
   providerId?: string;
   label?: string;
   providerParams?: unknown;
@@ -49,6 +53,9 @@ interface GenericACPAgentClientOptions {
   clientCapabilityMeta?: ACPClientCapabilityMeta;
   configFeatureOptions?: ACPConfigFeatureOption[];
   extensionCommandsParser?: ACPExtensionCommandsParser;
+  sessionResponseTransformer?: (response: SessionStateResponse) => SessionStateResponse;
+  defaultModes?: AgentMode[];
+  modeIdTransformer?: (modeId: string) => string | null;
 }
 
 export class GenericACPAgentClient extends ACPAgentClient {
@@ -60,7 +67,7 @@ export class GenericACPAgentClient extends ACPAgentClient {
   constructor(options: GenericACPAgentClientOptions) {
     const providerParams = parseGenericACPProviderParams(options.providerParams);
     super({
-      provider: "acp",
+      provider: options.provider ?? "acp",
       logger: options.logger,
       runtimeSettings: {
         env: options.env,
@@ -73,6 +80,9 @@ export class GenericACPAgentClient extends ACPAgentClient {
       clientCapabilityMeta: options.clientCapabilityMeta,
       configFeatureOptions: options.configFeatureOptions,
       extensionCommandsParser: options.extensionCommandsParser,
+      sessionResponseTransformer: options.sessionResponseTransformer,
+      defaultModes: options.defaultModes,
+      modeIdTransformer: options.modeIdTransformer,
     });
 
     this.command = options.command;
