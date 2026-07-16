@@ -105,6 +105,10 @@ const MutableDaemonProviderConfigSchema = z
   .object({
     enabled: z.boolean().optional(),
     additionalModels: z.array(MutableDaemonProviderModelSchema).optional(),
+    // Custom launch command (argv); first element is the binary, e.g. ["reclaude"].
+    // `null` explicitly clears the override (deepMerge can't delete keys); the daemon
+    // drops the command on merge so the provider falls back to its default binary.
+    command: z.array(z.string().min(1)).min(1).nullable().optional(),
   })
   .passthrough();
 
@@ -1253,6 +1257,49 @@ export const ProviderUsageListRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+// Grok Build multi-account RPCs. The daemon is the custodian of saved Grok
+// OAuth accounts; these messages carry only non-secret account metadata. No
+// schema in this family has a field capable of holding token bytes — the
+// credential types live only in packages/server. See docs/grok-accounts.md.
+export const GrokListAccountsRequestMessageSchema = z.object({
+  type: z.literal("provider.grok.list_accounts.request"),
+  requestId: z.string(),
+  // When true the daemon refreshes per-account quota (best-effort) before answering.
+  refreshQuota: z.boolean().optional(),
+});
+
+export const GrokStartLoginRequestMessageSchema = z.object({
+  type: z.literal("provider.grok.start_login.request"),
+  requestId: z.string(),
+  // Per-login sign-in method. "oauth" makes the host open its own browser;
+  // "device-auth" prints a URL + code to copy into any browser (multi-account).
+  // Optional for back-compat: an old client omits it and the daemon uses its
+  // configured default mode.
+  mode: z.enum(["oauth", "device-auth"]).optional(),
+});
+
+export const GrokCancelLoginRequestMessageSchema = z.object({
+  type: z.literal("provider.grok.cancel_login.request"),
+  requestId: z.string(),
+  loginId: z.string(),
+});
+
+export const GrokSwitchAccountRequestMessageSchema = z.object({
+  type: z.literal("provider.grok.switch_account.request"),
+  requestId: z.string(),
+  accountId: z.string(),
+  // Set on the confirm-resend after a "blocked" response (running Grok agents).
+  force: z.boolean().optional(),
+});
+
+export const GrokRemoveAccountRequestMessageSchema = z.object({
+  type: z.literal("provider.grok.remove_account.request"),
+  requestId: z.string(),
+  accountId: z.string(),
+  // Set on the confirm-resend after a "blocked_active_account" response.
+  force: z.boolean().optional(),
+});
+
 export const ResumeAgentRequestMessageSchema = z.object({
   type: z.literal("resume_agent_request"),
   handle: AgentPersistenceHandleSchema,
@@ -2247,6 +2294,11 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   RefreshProvidersSnapshotRequestMessageSchema,
   ProviderDiagnosticRequestMessageSchema,
   ProviderUsageListRequestMessageSchema,
+  GrokListAccountsRequestMessageSchema,
+  GrokStartLoginRequestMessageSchema,
+  GrokCancelLoginRequestMessageSchema,
+  GrokSwitchAccountRequestMessageSchema,
+  GrokRemoveAccountRequestMessageSchema,
   ResumeAgentRequestMessageSchema,
   ImportAgentRequestMessageSchema,
   RefreshAgentRequestMessageSchema,
@@ -2560,6 +2612,8 @@ export const ServerInfoStatusPayloadSchema = z
         commitsList: z.boolean().optional(),
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: z.boolean().optional(),
+        // COMPAT(grokAccounts): added in v0.1.124, remove gate after 2027-01-11.
+        grokAccounts: z.boolean().optional(),
       })
       .optional(),
   })
@@ -4316,6 +4370,10 @@ export const ProviderUsageWindowSchema = z.object({
   runsOutAt: z.string().nullable().optional(),
   shortfallPct: z.number().nullable().optional(),
   tone: ProviderUsageToneSchema.optional(),
+  // When true, the client renders the reset time as a full countdown
+  // (days+hours+minutes) instead of the abbreviated single-unit label.
+  // COMPAT: optional, older clients ignore it.
+  fullCountdown: z.boolean().optional(),
 });
 
 export const ProviderUsageBalanceSchema = z.object({
@@ -4357,6 +4415,131 @@ export const ProviderUsageListResponseMessageSchema = z.object({
     fetchedAt: z.string(),
     providers: z.array(ProviderUsageSchema),
   }),
+});
+
+// Grok Build multi-account state. Non-secret metadata only — structurally no
+// field here can carry OAuth token bytes; the credential types live only in
+// packages/server. See docs/grok-accounts.md.
+export const GrokAccountQuotaSchema = z.object({
+  status: z.enum(["ok", "unknown"]),
+  // Monthly credits (grok-billing.ts). Kept for back-compat with old clients but
+  // no longer populated — the accounts list now reads the weekly SuperGrok quota.
+  monthlyLimit: z.number().nullable().optional(),
+  creditUsage: z.number().nullable().optional(),
+  fetchedAt: z.string().nullable().optional(),
+  // Weekly SuperGrok usage that grok.com's Usage page shows (grok-weekly-quota.ts):
+  // whole-account percent 0-100, ISO reset timestamp, and the per-product split.
+  weeklyPercentUsed: z.number().nullable().optional(),
+  resetsAt: z.string().nullable().optional(),
+  breakdown: z
+    .array(z.object({ category: z.string(), percentUsed: z.number() }))
+    .nullable()
+    .optional(),
+});
+
+export const GrokAccountSchema = z.object({
+  id: z.string(),
+  email: z.string().nullable(),
+  name: z.string().nullable().optional(),
+  teamId: z.string().nullable().optional(),
+  authMode: z.string().nullable().optional(),
+  // Metadata about the stored token's expiry (ISO timestamp), not the token.
+  expiresAt: z.string().nullable().optional(),
+  addedAt: z.string(),
+  lastActivatedAt: z.string().nullable().optional(),
+  quota: GrokAccountQuotaSchema.nullable().optional(),
+  // True when the stored refresh token is dead (invalid_grant/revoked): quota
+  // reads "unknown" and the UI should prompt a re-login for this account.
+  needsReauth: z.boolean().optional(),
+});
+
+export const GrokAccountsStateSchema = z.object({
+  accounts: z.array(GrokAccountSchema),
+  // Derived by matching the live auth file against saved accounts; null when
+  // nothing matches (never a stored pointer).
+  activeAccountId: z.string().nullable(),
+  // A live sign-in Paseo hasn't saved; email is null when the identity can't
+  // be read (legacy/unparseable auth file).
+  unsavedActive: z.object({ email: z.string().nullable() }).nullable(),
+  // True when the host runs a managed Grok configuration (deployment key),
+  // which overrides auth.json entirely — switching would have no effect, so
+  // the UI disables it and explains why.
+  managedConfigActive: z.boolean().optional(),
+  login: z.object({
+    state: z.enum(["idle", "in_progress", "completed", "failed"]),
+    loginId: z.string().nullable(),
+    // Set when state is "completed": the saved (or refreshed) account id.
+    accountId: z.string().nullable().optional(),
+    failureReason: z.enum(["error", "cancelled", "timed_out"]).optional(),
+    // Scrubbed one-liner, never raw CLI output.
+    error: z.string().nullable(),
+  }),
+});
+
+export const GrokListAccountsResponseMessageSchema = z.object({
+  type: z.literal("provider.grok.list_accounts.response"),
+  payload: GrokAccountsStateSchema.extend({
+    requestId: z.string(),
+  }),
+});
+
+export const GrokStartLoginResponseMessageSchema = z.object({
+  type: z.literal("provider.grok.start_login.response"),
+  payload: z.object({
+    requestId: z.string(),
+    outcome: z.enum(["started", "already_in_progress"]),
+    loginId: z.string().nullable(),
+    // The OAuth authorize URL travels ONLY in this direct response to the
+    // requesting client (deferred until scraped from the CLI, <=10s) — never
+    // in the provider.grok.changed broadcast, never in logs.
+    authUrl: z.string().nullable().optional(),
+    // Only populated by the device-auth fallback, which needs URL AND code.
+    userCode: z.string().nullable().optional(),
+  }),
+});
+
+export const GrokCancelLoginResponseMessageSchema = z.object({
+  type: z.literal("provider.grok.cancel_login.response"),
+  payload: z.object({
+    requestId: z.string(),
+    ok: z.boolean(),
+  }),
+});
+
+export const GrokSwitchAccountResponseMessageSchema = z.object({
+  type: z.literal("provider.grok.switch_account.response"),
+  payload: z.object({
+    requestId: z.string(),
+    outcome: z.enum(["switched", "blocked"]),
+    // Re-derived from the live auth file after the swap, not the assumed target.
+    activeAccountId: z.string().nullable().optional(),
+    // Present when outcome is "blocked": Paseo-launched Grok agents still running.
+    blockingAgents: z
+      .array(
+        z.object({
+          agentId: z.string(),
+          title: z.string().nullable().optional(),
+        }),
+      )
+      .optional(),
+  }),
+});
+
+export const GrokRemoveAccountResponseMessageSchema = z.object({
+  type: z.literal("provider.grok.remove_account.response"),
+  payload: z.object({
+    requestId: z.string(),
+    outcome: z.enum(["removed", "blocked_active_account"]),
+  }),
+});
+
+// One-way server push with no matching .request (see docs/rpc-namespacing.md).
+// Broadcast to every connected client whenever saved accounts, the derived
+// active account, or the login lifecycle change. It never carries
+// authUrl/userCode — those travel only in the direct start_login.response.
+export const GrokAccountsChangedMessageSchema = z.object({
+  type: z.literal("provider.grok.changed"),
+  payload: GrokAccountsStateSchema,
 });
 
 const AgentSlashCommandSchema = z.object({
@@ -4661,6 +4844,12 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   RefreshProvidersSnapshotResponseMessageSchema,
   ProviderDiagnosticResponseMessageSchema,
   ProviderUsageListResponseMessageSchema,
+  GrokListAccountsResponseMessageSchema,
+  GrokStartLoginResponseMessageSchema,
+  GrokCancelLoginResponseMessageSchema,
+  GrokSwitchAccountResponseMessageSchema,
+  GrokRemoveAccountResponseMessageSchema,
+  GrokAccountsChangedMessageSchema,
   ListCommandsResponseSchema,
   ListTerminalsResponseSchema,
   TerminalsChangedSchema,
@@ -4825,6 +5014,19 @@ export type ProviderUsageDetail = z.infer<typeof ProviderUsageDetailSchema>;
 export type ProviderUsageListResponseMessage = z.infer<
   typeof ProviderUsageListResponseMessageSchema
 >;
+export type GrokAccountQuota = z.infer<typeof GrokAccountQuotaSchema>;
+export type GrokAccount = z.infer<typeof GrokAccountSchema>;
+export type GrokAccountsState = z.infer<typeof GrokAccountsStateSchema>;
+export type GrokListAccountsResponseMessage = z.infer<typeof GrokListAccountsResponseMessageSchema>;
+export type GrokStartLoginResponseMessage = z.infer<typeof GrokStartLoginResponseMessageSchema>;
+export type GrokCancelLoginResponseMessage = z.infer<typeof GrokCancelLoginResponseMessageSchema>;
+export type GrokSwitchAccountResponseMessage = z.infer<
+  typeof GrokSwitchAccountResponseMessageSchema
+>;
+export type GrokRemoveAccountResponseMessage = z.infer<
+  typeof GrokRemoveAccountResponseMessageSchema
+>;
+export type GrokAccountsChangedMessage = z.infer<typeof GrokAccountsChangedMessageSchema>;
 export type ChatCreateResponse = z.infer<typeof ChatCreateResponseSchema>;
 export type ChatListResponse = z.infer<typeof ChatListResponseSchema>;
 export type ChatInspectResponse = z.infer<typeof ChatInspectResponseSchema>;
