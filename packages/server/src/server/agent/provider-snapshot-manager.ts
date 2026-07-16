@@ -18,6 +18,7 @@ import type {
 import type { ManagedAgent } from "./agent-manager.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type { ManagedProcessRegistry } from "../managed-processes/managed-processes.js";
+import type { GrokQuotaFailoverController } from "../../services/grok/grok-account-service.js";
 import type {
   AgentProviderRuntimeSettingsMap,
   ProviderOverride,
@@ -89,6 +90,7 @@ export interface ProviderSnapshotManagerOptions {
   providerOverrides?: Record<string, ProviderOverride>;
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
   managedProcesses?: ManagedProcessRegistry;
+  grokAccountController?: GrokQuotaFailoverController;
   isDev?: boolean;
   extraClients?: Partial<Record<AgentProvider, AgentClient>>;
   refreshTimeoutMs?: number;
@@ -180,6 +182,7 @@ export class ProviderSnapshotManager {
   private readonly logger: Logger;
   private readonly workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
   private readonly managedProcesses?: ManagedProcessRegistry;
+  private readonly grokAccountController?: GrokQuotaFailoverController;
   private readonly isDev: boolean;
   private readonly extraClients: Partial<Record<AgentProvider, AgentClient>>;
   private runtimeSettings: AgentProviderRuntimeSettingsMap | undefined;
@@ -192,6 +195,7 @@ export class ProviderSnapshotManager {
     this.logger = options.logger;
     this.workspaceGitService = options.workspaceGitService;
     this.managedProcesses = options.managedProcesses;
+    this.grokAccountController = options.grokAccountController;
     this.isDev = options.isDev === true;
     this.extraClients = options.extraClients ?? {};
     this.runtimeSettings = options.runtimeSettings;
@@ -446,6 +450,7 @@ export class ProviderSnapshotManager {
       providerOverrides: this.providerOverrides,
       workspaceGitService: this.workspaceGitService,
       managedProcesses: this.managedProcesses,
+      grokAccountController: this.grokAccountController,
       isDev: this.isDev,
     });
 

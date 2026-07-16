@@ -123,6 +123,9 @@ import { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { DaemonConfigBrowserToolsPolicy } from "./browser-tools/policy.js";
 import { WorkspaceGitServiceImpl } from "./workspace-git-service.js";
 import { resolveWorkspaceIdForPath } from "./resolve-workspace-id-for-path.js";
+import { GrokAccountService } from "../services/grok/grok-account-service.js";
+import { GrokAccountStore } from "../services/grok/grok-account-store.js";
+import { defaultGrokAuthFilePath } from "../services/grok/grok-auth-file.js";
 import {
   archiveByScope,
   archivePersistedWorkspaceRecord,
@@ -744,6 +747,24 @@ export async function createPaseoDaemon(
       github,
     },
   });
+  let grokAgentManager: AgentManager | null = null;
+  const grokAccountStore = new GrokAccountStore({
+    rootDir: path.join(config.paseoHome, "grok-accounts"),
+    liveAuthFilePath: defaultGrokAuthFilePath(),
+  });
+  const grokAccountService = new GrokAccountService({
+    store: grokAccountStore,
+    listActiveGrokAgents: () =>
+      (grokAgentManager?.listAgents() ?? [])
+        .filter(
+          (agent) =>
+            agent.provider === "grok" &&
+            (agent.lifecycle === "initializing" || agent.lifecycle === "running"),
+        )
+        .map((agent) => ({ agentId: agent.id, title: agent.config.title ?? null })),
+    fetchApi: fetch,
+  });
+  grokAccountService.initialize();
   const providerSnapshotLogger = logger.child({ module: "provider-snapshot-manager" });
   const providerSnapshotManager = new ProviderSnapshotManager({
     logger: providerSnapshotLogger,
@@ -751,6 +772,7 @@ export async function createPaseoDaemon(
     providerOverrides: config.providerOverrides,
     workspaceGitService,
     managedProcesses,
+    grokAccountController: grokAccountService,
     isDev: config.isDev === true,
     extraClients: config.agentClients,
   });
@@ -766,6 +788,7 @@ export async function createPaseoDaemon(
     mcpAuthToken: agentMcpAuthToken,
     logger,
   });
+  grokAgentManager = agentManager;
 
   const detachAgentStoragePersistence = attachAgentStoragePersistence(
     logger,
@@ -1384,6 +1407,7 @@ export async function createPaseoDaemon(
               },
               serviceProxyPublicBaseUrl,
               browserToolsBroker,
+              { store: grokAccountStore, service: grokAccountService },
             );
 
             if (relayEnabled) {

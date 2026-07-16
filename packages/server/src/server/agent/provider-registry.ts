@@ -22,6 +22,7 @@ import {
 import { normalizeAgentModelDefinition } from "./agent-sdk-types.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type { ManagedProcessRegistry } from "../managed-processes/managed-processes.js";
+import type { GrokQuotaFailoverController } from "../../services/grok/grok-account-service.js";
 import type {
   AgentProviderRuntimeSettingsMap,
   ProviderOverride,
@@ -33,6 +34,7 @@ import { CodexAppServerAgentClient } from "./providers/codex-app-server-agent.js
 import { CopilotACPAgentClient } from "./providers/copilot-acp-agent.js";
 import { CursorACPAgentClient } from "./providers/cursor-acp-agent.js";
 import { GenericACPAgentClient } from "./providers/generic-acp-agent.js";
+import { GrokACPAgentClient } from "./providers/grok/acp-agent.js";
 import { KiroACPAgentClient } from "./providers/kiro-acp-agent.js";
 import { OpenCodeAgentClient } from "./providers/opencode-agent.js";
 import { PiRpcAgentClient } from "./providers/pi/agent.js";
@@ -78,6 +80,7 @@ export interface BuildProviderRegistryOptions {
   providerOverrides?: Record<string, ProviderOverride>;
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
   managedProcesses?: ManagedProcessRegistry;
+  grokAccountController?: GrokQuotaFailoverController;
   isDev?: boolean;
 }
 
@@ -613,7 +616,7 @@ function buildResolvedBuiltinProviders(
 function addDerivedProviders(
   resolvedProviders: Map<string, ResolvedProvider>,
   providerOverrides: Record<string, ProviderOverride>,
-  options: Pick<BuildProviderRegistryOptions, "managedProcesses">,
+  options: Pick<BuildProviderRegistryOptions, "managedProcesses" | "grokAccountController">,
 ): void {
   for (const [providerId, override] of Object.entries(providerOverrides)) {
     if (resolvedProviders.has(providerId) || BUILTIN_PROVIDER_IDS.includes(providerId)) {
@@ -667,6 +670,12 @@ function addDerivedProviders(
           }
           if (providerId === "traecli") {
             return new TraeACPAgentClient(acpOptions);
+          }
+          if (providerId === "grok") {
+            return new GrokACPAgentClient({
+              ...acpOptions,
+              accountController: options.grokAccountController,
+            });
           }
           return new GenericACPAgentClient(acpOptions);
         },
@@ -730,6 +739,7 @@ export function buildProviderRegistry(
   );
   addDerivedProviders(resolvedProviders, providerOverrides, {
     managedProcesses: options?.managedProcesses,
+    grokAccountController: options?.grokAccountController,
   });
 
   return Object.fromEntries(

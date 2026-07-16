@@ -196,6 +196,7 @@ import {
   type GitHubService,
 } from "../services/github-service.js";
 import type { ProviderUsageService } from "../services/quota-fetcher/service.js";
+import type { GrokAccountService } from "../services/grok/grok-account-service.js";
 import {
   summarizeFetchWorkspacesEntries,
   workspaceIdsOnCheckout,
@@ -461,6 +462,7 @@ export interface SessionOptions {
   terminalManager: TerminalManager | null;
   providerSnapshotManager: ProviderSnapshotManager;
   providerUsageService: ProviderUsageService;
+  grok: GrokAccountService;
   serviceProxy?: ServiceProxySubsystem;
   scriptRuntimeStore?: WorkspaceScriptRuntimeStore;
   workspaceSetupSnapshots?: Map<string, WorkspaceSetupSnapshot>;
@@ -653,6 +655,7 @@ export class Session {
       terminalManager,
       providerSnapshotManager,
       providerUsageService,
+      grok,
       serviceProxy,
       scriptRuntimeStore,
       workspaceSetupSnapshots,
@@ -793,6 +796,7 @@ export class Session {
       },
       providerSnapshotManager,
       providerUsageService,
+      grok,
       logger: this.sessionLogger,
     });
     this.agentConfigSession = new AgentConfigSession({
@@ -1767,6 +1771,16 @@ export class Session {
         return this.providerCatalogSession.handleProviderDiagnosticRequest(msg);
       case "provider.usage.list.request":
         return this.providerCatalogSession.handleProviderUsageListRequest(msg);
+      case "provider.grok.list_accounts.request":
+        return this.providerCatalogSession.handleGrokListAccountsRequest(msg);
+      case "provider.grok.start_login.request":
+        return this.providerCatalogSession.handleGrokStartLoginRequest(msg);
+      case "provider.grok.cancel_login.request":
+        return this.providerCatalogSession.handleGrokCancelLoginRequest(msg);
+      case "provider.grok.switch_account.request":
+        return this.providerCatalogSession.handleGrokSwitchAccountRequest(msg);
+      case "provider.grok.remove_account.request":
+        return this.providerCatalogSession.handleGrokRemoveAccountRequest(msg);
       default:
         return undefined;
     }

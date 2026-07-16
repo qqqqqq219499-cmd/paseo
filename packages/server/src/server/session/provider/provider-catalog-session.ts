@@ -13,6 +13,10 @@ import type {
 } from "../../agent/agent-sdk-types.js";
 import type { ProviderAvailability } from "../../agent/agent-manager.js";
 import type { ProviderUsageService } from "../../../services/quota-fetcher/service.js";
+import {
+  GrokServiceError,
+  type GrokAccountService,
+} from "../../../services/grok/grok-account-service.js";
 import { expandTilde } from "../../../utils/path.js";
 
 // COMPAT(customModeIcons): the only mode icons known to clients before v0.1.84. Any
@@ -47,6 +51,7 @@ export interface ProviderCatalogSessionOptions {
   host: ProviderCatalogSessionHost;
   providerSnapshotManager: ProviderSnapshotManager;
   providerUsageService: ProviderUsageService;
+  grok: GrokAccountService;
   logger: pino.Logger;
 }
 
@@ -61,6 +66,7 @@ export class ProviderCatalogSession {
   private readonly host: ProviderCatalogSessionHost;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private readonly providerUsageService: ProviderUsageService;
+  private readonly grok: GrokAccountService;
   private readonly logger: pino.Logger;
   private unsubscribeSnapshotEvents: (() => void) | null = null;
 
@@ -68,6 +74,7 @@ export class ProviderCatalogSession {
     this.host = options.host;
     this.providerSnapshotManager = options.providerSnapshotManager;
     this.providerUsageService = options.providerUsageService;
+    this.grok = options.grok;
     this.logger = options.logger;
   }
 
@@ -447,6 +454,115 @@ export class ProviderCatalogSession {
           requestType: msg.type,
           error: `Failed to list provider usage: ${err.message}`,
           code: "provider_usage_list_failed",
+        },
+      });
+    }
+  }
+
+  // Grok multi-account RPCs. The GrokAccountService owns all mutation safety;
+  // these handlers only shuttle its results onto the wire. No handler ever
+  // returns token bytes — the state shape is structurally secret-free.
+  async handleGrokListAccountsRequest(
+    msg: Extract<SessionInboundMessage, { type: "provider.grok.list_accounts.request" }>,
+  ): Promise<void> {
+    // getState never throws (quota is best-effort inside), so no try/catch.
+    const state = await this.grok.getState({ refreshQuota: msg.refreshQuota });
+    this.host.emit({
+      type: "provider.grok.list_accounts.response",
+      payload: { requestId: msg.requestId, ...state },
+    });
+  }
+
+  async handleGrokStartLoginRequest(
+    msg: Extract<SessionInboundMessage, { type: "provider.grok.start_login.request" }>,
+  ): Promise<void> {
+    try {
+      const result = await this.grok.startLogin({ mode: msg.mode });
+      // authUrl/userCode ride ONLY this direct response (design §7 G1); they are
+      // absent from the "already_in_progress" branch and never broadcast.
+      this.host.emit({
+        type: "provider.grok.start_login.response",
+        payload: {
+          requestId: msg.requestId,
+          outcome: result.outcome,
+          loginId: result.loginId,
+          authUrl: result.outcome === "started" ? result.authUrl : null,
+          userCode: result.outcome === "started" ? result.userCode : null,
+        },
+      });
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.logger.error({ err }, "Grok login start failed");
+      this.host.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: msg.requestId,
+          requestType: msg.type,
+          error: err.message,
+          code: "grok_login_failed",
+        },
+      });
+    }
+  }
+
+  async handleGrokCancelLoginRequest(
+    msg: Extract<SessionInboundMessage, { type: "provider.grok.cancel_login.request" }>,
+  ): Promise<void> {
+    const ok = await this.grok.cancelLogin(msg.loginId);
+    this.host.emit({
+      type: "provider.grok.cancel_login.response",
+      payload: { requestId: msg.requestId, ok },
+    });
+  }
+
+  async handleGrokSwitchAccountRequest(
+    msg: Extract<SessionInboundMessage, { type: "provider.grok.switch_account.request" }>,
+  ): Promise<void> {
+    try {
+      const result = await this.grok.switchAccount({ accountId: msg.accountId, force: msg.force });
+      this.host.emit({
+        type: "provider.grok.switch_account.response",
+        payload: {
+          requestId: msg.requestId,
+          outcome: result.outcome,
+          activeAccountId: result.outcome === "switched" ? result.activeAccountId : undefined,
+          blockingAgents: result.outcome === "blocked" ? result.blockingAgents : undefined,
+        },
+      });
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.logger.error({ err }, "Grok account switch failed");
+      this.host.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: msg.requestId,
+          requestType: msg.type,
+          error: err.message,
+          code: error instanceof GrokServiceError ? error.code : "grok_switch_failed",
+        },
+      });
+    }
+  }
+
+  async handleGrokRemoveAccountRequest(
+    msg: Extract<SessionInboundMessage, { type: "provider.grok.remove_account.request" }>,
+  ): Promise<void> {
+    try {
+      const result = await this.grok.removeAccount({ accountId: msg.accountId, force: msg.force });
+      this.host.emit({
+        type: "provider.grok.remove_account.response",
+        payload: { requestId: msg.requestId, outcome: result.outcome },
+      });
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.logger.error({ err }, "Grok account remove failed");
+      this.host.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: msg.requestId,
+          requestType: msg.type,
+          error: err.message,
+          code: error instanceof GrokServiceError ? error.code : "grok_remove_failed",
         },
       });
     }

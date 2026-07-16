@@ -12,12 +12,16 @@ import type pino from "pino";
 import type { ProjectRegistry, WorkspaceRegistry } from "./workspace-registry.js";
 import type { FileBackedChatService } from "./chat/chat-service.js";
 import type { LoopService } from "./loop-service.js";
+import { GrokAccountService } from "../services/grok/grok-account-service.js";
+import { GrokAccountStore } from "../services/grok/grok-account-store.js";
+import { defaultGrokAuthFilePath } from "../services/grok/grok-auth-file.js";
 import type { ScheduleService } from "./schedule/service.js";
 import type { CheckoutDiffManager, CheckoutDiffMetrics } from "./checkout-diff-manager.js";
 import type { DaemonConfigStore, MutableDaemonConfig } from "./daemon-config-store.js";
 import {
   type ServerInfoStatusPayload,
   type WorkspaceSetupSnapshot,
+  type GrokAccountsState,
   type WSHelloMessage,
   type WSInboundMessage,
   WSInboundMessageSchema,
@@ -450,7 +454,10 @@ export class VoiceAssistantWebSocketServer {
   private eventLoopDelayMonitor: ReturnType<typeof monitorEventLoopDelay> | null = null;
   private unsubscribeSpeechReadiness: (() => void) | null = null;
   private unsubscribeDaemonConfigChange: (() => void) | null = null;
+  private unsubscribeGrokAccountChange: (() => void) | null = null;
   private readonly providerUsageService: ProviderUsageService;
+  private readonly grokAccountStore: GrokAccountStore;
+  private readonly grokAccountService: GrokAccountService;
   private unsubscribeTerminalActivity: (() => void) | null = null;
   private readonly browserToolsBroker: BrowserToolsBroker | null;
   private readonly browserToolsRegistrations = new Map<string, BrowserToolsRegistration>();
@@ -499,6 +506,7 @@ export class VoiceAssistantWebSocketServer {
     daemonRuntimeConfig?: DaemonRuntimeConfig,
     serviceProxyPublicBaseUrl?: string | null,
     browserToolsBroker?: BrowserToolsBroker | null,
+    grokAccounts?: { store: GrokAccountStore; service: GrokAccountService },
   ) {
     this.logger = logger.child({ module: "websocket-server" });
     this.serverId = serverId;
@@ -577,6 +585,29 @@ export class VoiceAssistantWebSocketServer {
     this.providerUsageService = new ProviderUsageService({
       logger: this.logger,
     });
+
+    // Grok Build multi-account custodian: saved OAuth accounts under
+    // $PASEO_HOME/grok-accounts, the live ~/.grok/auth.json as the derived-active
+    // source, and the provider.grok.* RPC handlers. initialize() runs the startup
+    // GC + staging sweep; onChange fans state to every client (never the cookie).
+    if (grokAccounts) {
+      this.grokAccountStore = grokAccounts.store;
+      this.grokAccountService = grokAccounts.service;
+    } else {
+      this.grokAccountStore = new GrokAccountStore({
+        rootDir: join(this.paseoHome, "grok-accounts"),
+        liveAuthFilePath: defaultGrokAuthFilePath(),
+      });
+      this.grokAccountService = new GrokAccountService({
+        store: this.grokAccountStore,
+        listActiveGrokAgents: () => this.listActiveGrokAgents(),
+        fetchApi: fetch,
+      });
+      this.grokAccountService.initialize();
+    }
+    this.unsubscribeGrokAccountChange = this.grokAccountService.onChange((state) =>
+      this.broadcastGrokChanged(state),
+    );
 
     this.wss = this.createWebSocketServer(server, wsConfig, auth);
     this.startRuntimeMetricsInterval();
@@ -796,6 +827,8 @@ export class VoiceAssistantWebSocketServer {
     this.unsubscribeSpeechReadiness = null;
     this.unsubscribeDaemonConfigChange?.();
     this.unsubscribeDaemonConfigChange = null;
+    this.unsubscribeGrokAccountChange?.();
+    this.unsubscribeGrokAccountChange = null;
     this.unsubscribeTerminalActivity?.();
     this.unsubscribeTerminalActivity = null;
     if (this.runtimeMetricsInterval) {
@@ -1040,6 +1073,7 @@ export class VoiceAssistantWebSocketServer {
       terminalManager: this.terminalManager,
       providerSnapshotManager: this.providerSnapshotManager,
       providerUsageService: this.providerUsageService,
+      grok: this.grokAccountService,
       serviceProxy: this.serviceProxy ?? undefined,
       scriptRuntimeStore: this.scriptRuntimeStore ?? undefined,
       workspaceSetupSnapshots: this.workspaceSetupSnapshots,
@@ -1242,6 +1276,8 @@ export class VoiceAssistantWebSocketServer {
         workspaceRecovery: true,
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: true,
+        // COMPAT(grokAccounts): multi-account Grok login/switch UI.
+        grokAccounts: true,
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
         agentDetach: true,
         // COMPAT(daemonDiagnostics): added in v0.1.100, remove gate after 2026-12-25 once daemon floor >= v0.1.100.
@@ -1947,6 +1983,31 @@ export class VoiceAssistantWebSocketServer {
       focusedTerminalId: activity.focusedTerminalId,
       lastActivityAtMs: activity.lastActivityAt.getTime(),
     };
+  }
+
+  // Fan a grok account/state change (saved accounts, derived active, login
+  // lifecycle) out to every connected client. The state is structurally
+  // secret-free — it never carries token bytes or the login authUrl.
+  private broadcastGrokChanged(payload: GrokAccountsState): void {
+    const message = wrapSessionMessage({ type: "provider.grok.changed", payload });
+    for (const [ws] of this.sessions) {
+      this.sendToClient(ws, message);
+    }
+  }
+
+  // Paseo-launched Grok agents still mid-work, injected into GrokAccountService so
+  // an unforced account switch is blocked while they run. "Busy" mirrors the
+  // AgentManager BUSY_STATUSES set (initializing | running); the display title
+  // falls back to the config title, then null.
+  private listActiveGrokAgents(): { agentId: string; title: string | null }[] {
+    return this.agentManager
+      .listAgents()
+      .filter(
+        (agent) =>
+          agent.provider === "grok" &&
+          (agent.lifecycle === "initializing" || agent.lifecycle === "running"),
+      )
+      .map((agent) => ({ agentId: agent.id, title: agent.config.title ?? null }));
   }
 
   private async broadcastAgentAttention(params: {
