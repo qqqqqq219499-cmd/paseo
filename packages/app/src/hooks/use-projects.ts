@@ -14,6 +14,9 @@ import {
 } from "@/stores/session-store";
 import { buildProjects, type ProjectHost, type ProjectSummary } from "@/utils/projects";
 
+/** Query-cache key used by rename/refresh call sites that still invalidate projects. */
+export const projectsQueryKey = ["projects"] as const;
+
 export interface ProjectHostError {
   serverId: string;
   serverName: string;

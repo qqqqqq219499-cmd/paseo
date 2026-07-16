@@ -11,7 +11,16 @@ import {
   X,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import {
   Pressable,
   StyleSheet as RNStyleSheet,
@@ -24,7 +33,11 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
+import {
+  electronDragStyle,
+  electronNoDragStyle,
+  TitlebarDragRegion,
+} from "@/components/desktop/titlebar-drag-region";
 import { resolveDesktopSidebarWidth } from "@/components/desktop-sidebar-layout";
 import { HostPicker } from "@/components/hosts/host-picker";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
@@ -36,6 +49,7 @@ import { HEADER_INNER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout"
 import { isWeb } from "@/constants/platform";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
+import { useAppSettings } from "@/hooks/use-settings";
 import { canCreateWorktreeForProjectKind } from "@/projects/host-projects";
 import { useHostFeature } from "@/runtime/host-features";
 import {
@@ -43,6 +57,8 @@ import {
   type SidebarWorkspaceEntry,
 } from "@/hooks/use-sidebar-workspaces-list";
 import { useSidebarModel } from "@/components/sidebar/sidebar-model";
+import { SidebarSessionsList } from "@/components/sidebar/sidebar-sessions-list";
+import { SidebarSessionsToolbar } from "@/components/sidebar/sidebar-sessions-toolbar";
 import type { PinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 import { RetainedPanelActivity } from "@/components/retained-panel";
 import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
@@ -52,6 +68,7 @@ import { useHosts } from "@/runtime/host-runtime";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { useWorkspace } from "@/stores/session-store-hooks";
 import { usePanelStore } from "@/stores/panel-store";
+import { getIsElectron } from "@/constants/platform";
 import { useOwnsWindowChromeCorner, WindowChromeSafeArea } from "@/utils/desktop-window";
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
@@ -82,10 +99,16 @@ interface SidebarSharedProps {
   isRevalidating: boolean;
   isManualRefresh: boolean;
   groupMode: SidebarGroupMode;
+  activeServerId: string | null;
+  /** New theme: flat recency sessions layout instead of the grouped list. */
+  isNewThemeSidebar: boolean;
   collapsedProjectKeys: ReadonlySet<string>;
   shortcutIndexByWorkspaceKey: Map<string, number>;
   toggleProjectCollapsed: (projectKey: string) => void;
   handleRefresh: () => void;
+  handleNewWorkspaceNavigate: () => void;
+  /** Multi-host flat list: start a new conversation on a specific host. */
+  handleNewWorkspaceForHost: (serverId: string) => void;
   handleOpenProject: () => void;
   handleHome: () => void;
   handleSettings: () => void;
@@ -97,12 +120,15 @@ interface SidebarSharedProps {
 
 interface SidebarLabels {
   addProject: string;
+  openProject: string;
   newWorkspace: string;
+  newConversation: string;
   hosts: string;
   home: string;
   settings: string;
   searchHosts: string;
   sessions: string;
+  history: string;
   schedules: string;
   closeSidebar: string;
 }
@@ -125,9 +151,16 @@ interface DesktopSidebarProps extends SidebarSharedProps {
 export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boolean }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const { settings } = useAppSettings();
+  // New theme swaps the project-grouped list for a flat recency sessions list +
+  // top toolbar. Track the device-local setting reactively.
+  const isNewThemeSidebar = settings.newThemeEnabled;
   const insets = useSafeAreaInsets();
   const isCompactLayout = useIsCompactFormFactor();
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
+  const hosts = useHosts();
+  const activeWorkspaceSelection = useActiveWorkspaceSelection();
+  const activeServerId = activeWorkspaceSelection?.serverId ?? hosts[0]?.serverId ?? null;
 
   const {
     projects,
@@ -216,16 +249,31 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
     router.push(buildSchedulesRoute());
   }, []);
 
+  const handleNewWorkspaceNavigate = useCallback(() => {
+    router.push(
+      activeServerId
+        ? buildNewWorkspaceRoute({ serverId: activeServerId })
+        : buildNewWorkspaceRoute(),
+    );
+  }, [activeServerId]);
+
+  const handleNewWorkspaceForHost = useCallback((serverId: string) => {
+    router.navigate(buildNewWorkspaceRoute({ serverId }));
+  }, []);
+
   const newWorkspaceKeys = useShortcutKeys("new-workspace");
   const labels = useMemo(
     (): SidebarLabels => ({
       addProject: t("sidebar.actions.addProject"),
+      openProject: t("sidebar.actions.addProject"),
       newWorkspace: t("sidebar.actions.newWorkspace"),
+      newConversation: t("sidebar.sessionsList.newConversation"),
       hosts: t("sidebar.actions.hosts"),
       home: t("sidebar.actions.home"),
       settings: t("sidebar.actions.settings"),
       searchHosts: t("sidebar.host.searchPlaceholder"),
       sessions: t("sidebar.sections.sessions"),
+      history: t("sidebar.sessionsList.history"),
       schedules: t("sidebar.sections.schedules"),
       closeSidebar: t("sidebar.actions.closeSidebar"),
     }),
@@ -243,10 +291,14 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
     isRevalidating,
     isManualRefresh,
     groupMode,
+    activeServerId,
+    isNewThemeSidebar,
     collapsedProjectKeys,
     shortcutIndexByWorkspaceKey,
     toggleProjectCollapsed,
     handleRefresh,
+    handleNewWorkspaceNavigate,
+    handleNewWorkspaceForHost,
     labels,
     newWorkspaceKeys,
   };
@@ -472,6 +524,7 @@ function SidebarFooter({
   handleHome,
   handleSettings,
   labels,
+  isNewThemeSidebar,
   handleAddHost,
   handleOpenHostSettings,
 }: {
@@ -486,6 +539,7 @@ function SidebarFooter({
     settings: string;
     searchHosts: string;
   };
+  isNewThemeSidebar: boolean;
   handleAddHost: () => void;
   handleOpenHostSettings: (serverId: string) => void;
 }) {
@@ -493,7 +547,7 @@ function SidebarFooter({
   const settingsKeys = useShortcutKeys("toggle-settings");
 
   return (
-    <View style={styles.sidebarFooter}>
+    <View style={isNewThemeSidebar ? styles.sidebarFooterFlat : styles.sidebarFooter}>
       <View style={styles.footerIconRow}>
         <SidebarHostPicker
           theme={theme}
@@ -501,21 +555,25 @@ function SidebarFooter({
           onAddHost={handleAddHost}
           onOpenHostSettings={handleOpenHostSettings}
         />
-        <FooterIconButton
-          onPress={handleOpenProject}
-          testID="sidebar-add-project"
-          label={labels.addProject}
-          icon={FolderPlus}
-          shortcutKeys={newAgentKeys}
-          theme={theme}
-        />
-        <FooterIconButton
-          onPress={handleHome}
-          testID="sidebar-home"
-          label={labels.home}
-          icon={Home}
-          theme={theme}
-        />
+        {!isNewThemeSidebar ? (
+          <>
+            <FooterIconButton
+              onPress={handleOpenProject}
+              testID="sidebar-add-project"
+              label={labels.addProject}
+              icon={FolderPlus}
+              shortcutKeys={newAgentKeys}
+              theme={theme}
+            />
+            <FooterIconButton
+              onPress={handleHome}
+              testID="sidebar-home"
+              label={labels.home}
+              icon={Home}
+              theme={theme}
+            />
+          </>
+        ) : null}
         <SidebarHelpMenu />
         <FooterIconButton
           onPress={handleSettings}
@@ -541,11 +599,15 @@ function MobileSidebar({
   isRevalidating,
   isManualRefresh,
   groupMode,
+  activeServerId,
+  isNewThemeSidebar,
   collapsedProjectKeys,
   shortcutIndexByWorkspaceKey,
   toggleProjectCollapsed,
   handleRefresh,
   newWorkspaceKeys,
+  handleNewWorkspaceNavigate,
+  handleNewWorkspaceForHost,
   handleOpenProject,
   handleHome,
   handleSettings,
@@ -562,7 +624,18 @@ function MobileSidebar({
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const isSessionsActive = pathname.includes("/sessions");
   const isSchedulesActive = pathname.includes("/schedules");
+  const showSchedules = getIsElectron();
   const { gesture: closeGesture, gestureRef: closeGestureRef } = useCloseAgentListGesture();
+  const toolbarLabels = useMemo(
+    () => ({
+      newConversation: labels.newConversation,
+      openProject: labels.openProject,
+      history: labels.history,
+      schedules: labels.schedules,
+      close: labels.closeSidebar,
+    }),
+    [labels],
+  );
 
   const handleViewMore = useCallback(() => {
     closeSidebar();
@@ -577,6 +650,24 @@ function MobileSidebar({
   const handleWorkspacePress = useCallback(() => {
     closeSidebar();
   }, [closeSidebar]);
+
+  const handleNewWorkspace = useCallback(() => {
+    closeSidebar();
+    handleNewWorkspaceNavigate();
+  }, [closeSidebar, handleNewWorkspaceNavigate]);
+
+  const handleNewChatForHost = useCallback(
+    (serverId: string) => {
+      closeSidebar();
+      handleNewWorkspaceForHost(serverId);
+    },
+    [closeSidebar, handleNewWorkspaceForHost],
+  );
+
+  const handleOpenProjectFromToolbar = useCallback(() => {
+    closeSidebar();
+    handleOpenProject();
+  }, [closeSidebar, handleOpenProject]);
 
   const mobileSidebarInsetStyle = useMemo(
     () => ({
@@ -594,72 +685,97 @@ function MobileSidebar({
       panelStyle={mobileSidebarInsetStyle}
     >
       <View style={styles.sidebarContent} pointerEvents="auto">
-        <WindowChromeSafeArea placement="below" />
-        <View style={styles.sidebarHeaderGroup}>
-          <SidebarNewWorkspaceHeaderRow
-            label={labels.newWorkspace}
-            testID="sidebar-global-new-workspace"
-            variant="compact"
-            shortcutKeys={newWorkspaceKeys}
-            onBeforeNavigate={closeSidebar}
-          />
-          <SidebarHeaderRow
-            icon={History}
-            label={labels.sessions}
-            onPress={handleViewMore}
-            isActive={isSessionsActive}
-            testID="sidebar-sessions"
-            variant="compact"
-          />
-          <SidebarHeaderRow
-            icon={CalendarClock}
-            label={labels.schedules}
-            onPress={handleViewSchedules}
-            isActive={isSchedulesActive}
-            testID="sidebar-schedules"
-            variant="compact"
-          />
-        </View>
-        <WindowChromeSafeArea placement="inline" style={styles.mobileCloseButtonRow}>
-          <Pressable
-            style={styles.mobileCloseButton}
-            onPress={closeSidebar}
-            testID="sidebar-close"
-            nativeID="sidebar-close"
-            accessible
-            accessibilityRole="button"
-            accessibilityLabel={labels.closeSidebar}
-            hitSlop={8}
-          >
-            {({ hovered, pressed }) => (
-              <X
-                size={theme.iconSize.md}
-                color={hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted}
+        {isNewThemeSidebar ? (
+          <>
+            <WindowChromeSafeArea placement="below" />
+            <SidebarSessionsToolbar
+              labels={toolbarLabels}
+              onNewConversation={handleNewWorkspace}
+              onOpenProject={handleOpenProjectFromToolbar}
+              onHistory={handleViewMore}
+              isHistoryActive={isSessionsActive}
+              onSchedules={showSchedules ? handleViewSchedules : undefined}
+              isSchedulesActive={isSchedulesActive}
+              onClose={closeSidebar}
+            />
+            <SidebarSessionsList
+              serverId={activeServerId}
+              parentGestureRef={closeGestureRef}
+              onNewChatForHost={handleNewChatForHost}
+            />
+          </>
+        ) : (
+          <>
+            <WindowChromeSafeArea placement="below" />
+            <View style={styles.sidebarHeaderGroup}>
+              <SidebarNewWorkspaceHeaderRow
+                label={labels.newWorkspace}
+                testID="sidebar-global-new-workspace"
+                variant="compact"
+                shortcutKeys={newWorkspaceKeys}
+                onBeforeNavigate={closeSidebar}
+              />
+              <SidebarHeaderRow
+                icon={History}
+                label={labels.sessions}
+                onPress={handleViewMore}
+                isActive={isSessionsActive}
+                testID="sidebar-sessions"
+                variant="compact"
+              />
+              <SidebarHeaderRow
+                icon={CalendarClock}
+                label={labels.schedules}
+                onPress={handleViewSchedules}
+                isActive={isSchedulesActive}
+                testID="sidebar-schedules"
+                variant="compact"
+              />
+            </View>
+            <WindowChromeSafeArea placement="inline" style={styles.mobileCloseButtonRow}>
+              <Pressable
+                style={styles.mobileCloseButton}
+                onPress={closeSidebar}
+                testID="sidebar-close"
+                nativeID="sidebar-close"
+                accessible
+                accessibilityRole="button"
+                accessibilityLabel={labels.closeSidebar}
+                hitSlop={8}
+              >
+                {({ hovered, pressed }) => (
+                  <X
+                    size={theme.iconSize.md}
+                    color={
+                      hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted
+                    }
+                  />
+                )}
+              </Pressable>
+            </WindowChromeSafeArea>
+
+            {isInitialLoad && !hasActiveHostFilter ? (
+              <SidebarAgentListSkeleton />
+            ) : (
+              <SidebarWorkspaceList
+                collapsedProjectKeys={collapsedProjectKeys}
+                onToggleProjectCollapsed={toggleProjectCollapsed}
+                shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
+                groupMode={groupMode}
+                statusGroups={statusGroups}
+                pinnedGroups={pinnedGroups}
+                projects={projects}
+                workspaceEntriesByKey={workspaceEntriesByKey}
+                projectNamesByKey={projectNamesByKey}
+                isRefreshing={isManualRefresh && isRevalidating}
+                onRefresh={handleRefresh}
+                onWorkspacePress={handleWorkspacePress}
+                onAddProject={handleOpenProject}
+                parentGestureRef={closeGestureRef}
+                listHeaderComponent={workspacesSectionHeaderElement}
               />
             )}
-          </Pressable>
-        </WindowChromeSafeArea>
-
-        {isInitialLoad && !hasActiveHostFilter ? (
-          <SidebarAgentListSkeleton />
-        ) : (
-          <SidebarWorkspaceList
-            collapsedProjectKeys={collapsedProjectKeys}
-            onToggleProjectCollapsed={toggleProjectCollapsed}
-            shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
-            groupMode={groupMode}
-            statusGroups={statusGroups}
-            pinnedGroups={pinnedGroups}
-            projects={projects}
-            workspaceEntriesByKey={workspaceEntriesByKey}
-            projectNamesByKey={projectNamesByKey}
-            isRefreshing={isManualRefresh && isRevalidating}
-            onRefresh={handleRefresh}
-            onWorkspacePress={handleWorkspacePress}
-            onAddProject={handleOpenProject}
-            parentGestureRef={closeGestureRef}
-            listHeaderComponent={workspacesSectionHeaderElement}
-          />
+          </>
         )}
 
         <SidebarFooter
@@ -668,6 +784,7 @@ function MobileSidebar({
           handleHome={handleHome}
           handleSettings={handleSettings}
           labels={labels}
+          isNewThemeSidebar={isNewThemeSidebar}
           handleAddHost={handleAddHost}
           handleOpenHostSettings={handleOpenHostSettings}
         />
@@ -687,11 +804,15 @@ function DesktopSidebar({
   isRevalidating,
   isManualRefresh,
   groupMode,
+  activeServerId,
+  isNewThemeSidebar,
   collapsedProjectKeys,
   shortcutIndexByWorkspaceKey,
   toggleProjectCollapsed,
   handleRefresh,
   newWorkspaceKeys,
+  handleNewWorkspaceNavigate,
+  handleNewWorkspaceForHost,
   handleOpenProject,
   handleHome,
   handleSettings,
@@ -708,6 +829,17 @@ function DesktopSidebar({
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const isSessionsActive = pathname.includes("/sessions");
   const isSchedulesActive = pathname.includes("/schedules");
+  const showSchedules = getIsElectron();
+  const toolbarLabels = useMemo(
+    () => ({
+      newConversation: labels.newConversation,
+      openProject: labels.openProject,
+      history: labels.history,
+      schedules: labels.schedules,
+      close: labels.closeSidebar,
+    }),
+    [labels],
+  );
   const sidebarWidth = usePanelStore((state) => state.sidebarWidth);
   const setSidebarWidth = usePanelStore((state) => state.setSidebarWidth);
   const { width: viewportWidth } = useWindowDimensions();
@@ -758,7 +890,9 @@ function DesktopSidebar({
     [active, resizeAnimatedStyle],
   );
   const desktopSidebarBorderStyle = useMemo(
-    () => [styles.desktopSidebarBorder, { flex: 1, paddingTop: insetsTop }],
+    // electronDragStyle: empty list / chrome gaps move the window; Pressables
+    // stay no-drag via public/index.html.
+    () => [styles.desktopSidebarBorder, electronDragStyle, { flex: 1, paddingTop: insetsTop }],
     [insetsTop],
   );
   const sidebarHeaderGroupStyle = useMemo(
@@ -766,9 +900,38 @@ function DesktopSidebar({
     [ownsTopLeft],
   );
   const resizeHandleStyle = useMemo(
-    () => [styles.resizeHandle, isWeb && ({ cursor: "col-resize" } as object)],
+    // Whole-sidebar drag would otherwise treat this plain View as a window-drag
+    // handle. Opt out so the resize gesture keeps working.
+    () => [styles.resizeHandle, isWeb && ({ cursor: "col-resize" } as object), electronNoDragStyle],
     [],
   );
+
+  let desktopSidebarBody: ReactNode;
+  if (isNewThemeSidebar) {
+    desktopSidebarBody = (
+      <SidebarSessionsList serverId={activeServerId} onNewChatForHost={handleNewWorkspaceForHost} />
+    );
+  } else if (isInitialLoad && !hasActiveHostFilter) {
+    desktopSidebarBody = <SidebarAgentListSkeleton />;
+  } else {
+    desktopSidebarBody = (
+      <SidebarWorkspaceList
+        collapsedProjectKeys={collapsedProjectKeys}
+        onToggleProjectCollapsed={toggleProjectCollapsed}
+        shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
+        groupMode={groupMode}
+        statusGroups={statusGroups}
+        pinnedGroups={pinnedGroups}
+        projects={projects}
+        workspaceEntriesByKey={workspaceEntriesByKey}
+        projectNamesByKey={projectNamesByKey}
+        isRefreshing={isManualRefresh && isRevalidating}
+        onRefresh={handleRefresh}
+        onAddProject={handleOpenProject}
+        listHeaderComponent={workspacesSectionHeaderElement}
+      />
+    );
+  }
 
   return (
     <Animated.View
@@ -778,59 +941,54 @@ function DesktopSidebar({
       style={desktopSidebarStyle}
     >
       <View style={desktopSidebarBorderStyle}>
+        {/* Whole-sidebar window drag (Electron). Gaps, empty list space, and
+            chrome that isn't a Pressable become drag handles. Pressables get
+            no-drag from public/index.html; only the resize handle needs an
+            explicit no-drag below. */}
+        <TitlebarDragRegion />
         <View style={styles.sidebarDragArea}>
-          {ownsTopLeft ? (
-            <View style={styles.desktopChromeRow}>
-              <TitlebarDragRegion />
+          {ownsTopLeft ? <View style={styles.desktopChromeRow} /> : null}
+          {isNewThemeSidebar ? (
+            <View style={sidebarHeaderGroupStyle}>
+              <SidebarSessionsToolbar
+                labels={toolbarLabels}
+                onNewConversation={handleNewWorkspaceNavigate}
+                onOpenProject={handleOpenProject}
+                onHistory={handleViewMore}
+                isHistoryActive={isSessionsActive}
+                onSchedules={showSchedules ? handleViewSchedules : undefined}
+                isSchedulesActive={isSchedulesActive}
+              />
             </View>
           ) : (
-            <TitlebarDragRegion />
+            <View style={sidebarHeaderGroupStyle}>
+              <SidebarNewWorkspaceHeaderRow
+                label={labels.newWorkspace}
+                testID="sidebar-global-new-workspace"
+                variant="compact"
+                shortcutKeys={newWorkspaceKeys}
+              />
+              <SidebarHeaderRow
+                icon={History}
+                label={labels.sessions}
+                onPress={handleViewMore}
+                isActive={isSessionsActive}
+                testID="sidebar-sessions"
+                variant="compact"
+              />
+              <SidebarHeaderRow
+                icon={CalendarClock}
+                label={labels.schedules}
+                onPress={handleViewSchedules}
+                isActive={isSchedulesActive}
+                testID="sidebar-schedules"
+                variant="compact"
+              />
+            </View>
           )}
-          <View style={sidebarHeaderGroupStyle}>
-            <SidebarNewWorkspaceHeaderRow
-              label={labels.newWorkspace}
-              testID="sidebar-global-new-workspace"
-              variant="compact"
-              shortcutKeys={newWorkspaceKeys}
-            />
-            <SidebarHeaderRow
-              icon={History}
-              label={labels.sessions}
-              onPress={handleViewMore}
-              isActive={isSessionsActive}
-              testID="sidebar-sessions"
-              variant="compact"
-            />
-            <SidebarHeaderRow
-              icon={CalendarClock}
-              label={labels.schedules}
-              onPress={handleViewSchedules}
-              isActive={isSchedulesActive}
-              testID="sidebar-schedules"
-              variant="compact"
-            />
-          </View>
         </View>
 
-        {isInitialLoad && !hasActiveHostFilter ? (
-          <SidebarAgentListSkeleton />
-        ) : (
-          <SidebarWorkspaceList
-            collapsedProjectKeys={collapsedProjectKeys}
-            onToggleProjectCollapsed={toggleProjectCollapsed}
-            shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
-            groupMode={groupMode}
-            statusGroups={statusGroups}
-            pinnedGroups={pinnedGroups}
-            projects={projects}
-            workspaceEntriesByKey={workspaceEntriesByKey}
-            projectNamesByKey={projectNamesByKey}
-            isRefreshing={isManualRefresh && isRevalidating}
-            onRefresh={handleRefresh}
-            onAddProject={handleOpenProject}
-            listHeaderComponent={workspacesSectionHeaderElement}
-          />
-        )}
+        {desktopSidebarBody}
 
         <SidebarCalloutSlot />
 
@@ -840,6 +998,7 @@ function DesktopSidebar({
           handleHome={handleHome}
           handleSettings={handleSettings}
           labels={labels}
+          isNewThemeSidebar={isNewThemeSidebar}
           handleAddHost={handleAddHost}
           handleOpenHostSettings={handleOpenHostSettings}
         />
@@ -932,7 +1091,7 @@ const styles = StyleSheet.create((theme) => ({
     // uses a slightly smaller paddingTop to balance the action buttons' centering
     // offset so the divider reads as visually centered between the two.
     paddingBottom: theme.spacing[1.5],
-    borderBottomWidth: 1,
+    borderBottomWidth: theme.shell.chromeDivider,
     borderBottomColor: theme.colors.border,
   },
   sidebarHeaderGroupBelowChrome: {
@@ -994,7 +1153,10 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surfaceSidebar,
   },
   desktopSidebarBorder: {
-    borderRightWidth: 1,
+    // Shell chrome-divider token: 1px classic, 0 new theme.
+    // position relative so the whole-sidebar TitlebarDragRegion fills it.
+    position: "relative",
+    borderRightWidth: theme.shell.chromeDivider,
     borderRightColor: theme.colors.border,
     backgroundColor: theme.colors.surfaceSidebar,
   },
@@ -1025,6 +1187,14 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[3],
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
+  },
+  // New theme: no top divider — toolbar already separates chrome from footer.
+  sidebarFooterFlat: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
   },
   footerIconRow: {
     flexDirection: "row",

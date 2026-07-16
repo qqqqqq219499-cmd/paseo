@@ -2567,12 +2567,12 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
-    borderBottomWidth: 1,
+    borderBottomWidth: theme.shell.chromeDivider,
     borderBottomColor: theme.colors.border,
   },
   diffStatusContainer: {
     height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
-    borderBottomWidth: 1,
+    borderBottomWidth: theme.shell.chromeDivider,
     borderBottomColor: theme.colors.border,
   },
   diffStatusInner: {
@@ -2700,7 +2700,7 @@ const styles = StyleSheet.create((theme) => ({
   fileSection: {
     overflow: "hidden",
     backgroundColor: theme.colors.surface2,
-    borderBottomWidth: 1,
+    borderBottomWidth: theme.shell.chromeDivider,
     borderBottomColor: theme.colors.border,
   },
   fileSectionHeaderContainer: {
@@ -2714,7 +2714,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface2,
   },
   fileSectionBorder: {
-    borderBottomWidth: 1,
+    borderBottomWidth: theme.shell.chromeDivider,
     borderBottomColor: theme.colors.border,
   },
   fileHeader: {
@@ -2802,7 +2802,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.diffDeletion,
   },
   diffContent: {
-    borderTopWidth: theme.borderWidth[1],
+    borderTopWidth: theme.shell.chromeDivider,
     borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.surface1,
   },
@@ -2823,7 +2823,7 @@ const styles = StyleSheet.create((theme) => ({
     overflow: "visible",
   },
   gutterCell: {
-    borderRightWidth: theme.borderWidth[1],
+    borderRightWidth: theme.shell.chromeDivider,
     borderRightColor: theme.colors.border,
     justifyContent: "flex-start",
     zIndex: 4,
@@ -2836,7 +2836,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface1,
   },
   inlineReviewGutterSpacer: {
-    borderRightWidth: theme.borderWidth[1],
+    borderRightWidth: theme.shell.chromeDivider,
     borderRightColor: theme.colors.border,
     backgroundColor: theme.colors.surface1,
     flexShrink: 0,
@@ -2870,7 +2870,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surfaceDiffEmpty,
   },
   splitCellWithDivider: {
-    borderLeftWidth: theme.borderWidth[1],
+    borderLeftWidth: theme.shell.chromeDivider,
     borderLeftColor: theme.colors.border,
   },
   diffLineContainer: {
@@ -2879,7 +2879,7 @@ const styles = StyleSheet.create((theme) => ({
     overflow: "visible",
   },
   lineNumberGutter: {
-    borderRightWidth: theme.borderWidth[1],
+    borderRightWidth: theme.shell.chromeDivider,
     borderRightColor: theme.colors.border,
     marginRight: theme.spacing[2],
     alignSelf: "stretch",
@@ -2940,7 +2940,7 @@ const styles = StyleSheet.create((theme) => ({
     color: "transparent",
   },
   statusMessageContainer: {
-    borderTopWidth: theme.borderWidth[1],
+    borderTopWidth: theme.shell.chromeDivider,
     borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.surface1,
     paddingHorizontal: theme.spacing[3],

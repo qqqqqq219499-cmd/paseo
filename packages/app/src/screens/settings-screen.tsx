@@ -56,7 +56,11 @@ import {
 import { useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { orderHostsLocalFirst, type HostProfile } from "@/types/host-connection";
-import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
+import {
+  electronDragStyle,
+  electronNoDragStyle,
+  TitlebarDragRegion,
+} from "@/components/desktop/titlebar-drag-region";
 import { WindowChromeRegion, WindowChromeSafeArea } from "@/utils/desktop-window";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { BackHeader } from "@/components/headers/back-header";
@@ -98,7 +102,13 @@ import {
 } from "@/screens/settings/host-page";
 import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
-import { SETTINGS_DESKTOP_SIDEBAR_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
+import {
+  HEADER_INNER_HEIGHT,
+  HEADER_INNER_HEIGHT_MOBILE,
+  NEW_THEME_HEADER_HEIGHT_DESKTOP,
+  SETTINGS_DESKTOP_SIDEBAR_WIDTH,
+  useIsCompactFormFactor,
+} from "@/constants/layout";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import {
   type EnableBuiltInDaemonOption,
@@ -1534,15 +1544,21 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
           />
         </WindowChromeRegion>
         <WindowChromeRegion corners="top-right">
-          <View style={desktopStyles.contentPane} testID="settings-detail-pane">
+          <View style={SETTINGS_DETAIL_COLUMN_STYLE} testID="settings-detail-pane">
+            {/* Shell underlay drag; floating card is no-drag for forms/scroll. */}
+            <TitlebarDragRegion />
             <ScreenHeader
               borderless={!detailHeader}
+              surfaceStyle={desktopStyles.detailHeaderSurface}
+              rowStyle={desktopStyles.detailHeaderRow}
               left={desktopDetailHeaderLeft}
               leftStyle={desktopStyles.detailLeft}
             />
-            <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
-              <View style={styles.content}>{content}</View>
-            </ScrollView>
+            <View style={SETTINGS_DETAIL_CARD_STYLE}>
+              <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
+                <View style={styles.content}>{content}</View>
+              </ScrollView>
+            </View>
           </View>
         </WindowChromeRegion>
       </View>
@@ -1644,18 +1660,54 @@ const desktopStyles = StyleSheet.create((theme) => ({
     flex: 1,
     flexDirection: "row",
   },
-  contentPane: {
+  // Holds the exposed detail header (sitting on the shell underlay) above the
+  // floating content card. surfaceShell == surface0 in classic themes (so the
+  // pane stays byte-identical) and #fafafa in the new theme.
+  centerColumn: {
     flex: 1,
+    minHeight: 0,
+    position: "relative",
+    backgroundColor: theme.colors.surfaceShell,
+  },
+  // Detail header exposed on the shell underlay; the bottom divider is dropped in
+  // the new theme (chromeDivider == 0) and kept in classic (== 1).
+  detailHeaderSurface: {
+    backgroundColor: theme.colors.surfaceShell,
+  },
+  detailHeaderRow: {
+    borderBottomWidth: theme.shell.chromeDivider,
+    height: {
+      xs: HEADER_INNER_HEIGHT_MOBILE,
+      md: theme.shell.floating ? NEW_THEME_HEADER_HEIGHT_DESKTOP : HEADER_INNER_HEIGHT,
+    },
+  },
+  // Floating settings card — scrollable content sits inside; header is a sibling
+  // above. shell tokens are 0/0/visible in classic (flush) and inset+rounded in
+  // the new theme.
+  centerCard: {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: theme.colors.surfaceWorkspace,
+    marginTop: 0,
+    marginHorizontal: theme.shell.contentMargin,
+    marginBottom: theme.shell.contentMargin,
+    borderRadius: theme.shell.contentRadius,
+    overflow: theme.shell.contentOverflow,
   },
   detailLeft: {
     gap: theme.spacing[2],
   },
 }));
 
+// Module-level so desktop early-return paths don't call hooks for these styles.
+const SETTINGS_DETAIL_COLUMN_STYLE = [desktopStyles.centerColumn, electronDragStyle];
+const SETTINGS_DETAIL_CARD_STYLE = [desktopStyles.centerCard, electronNoDragStyle];
+
 const sidebarStyles = StyleSheet.create((theme) => ({
   desktopContainer: {
     width: SETTINGS_DESKTOP_SIDEBAR_WIDTH,
-    borderRightWidth: 1,
+    // Shell chrome-divider token: 1px classic, 0 new theme.
+    borderRightWidth: theme.shell.chromeDivider,
     borderRightColor: theme.colors.border,
     backgroundColor: theme.colors.surfaceSidebar,
   },

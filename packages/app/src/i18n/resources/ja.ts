@@ -139,34 +139,72 @@ export const ja: TranslationResources = {
   },
   agentControls: {
     provider: {
-      fallback: "プロバイダー",
-      select: "エージェントプロバイダーを選択",
+      fallback: "Provider",
+      select: "Select agent provider",
     },
     thinking: {
-      title: "思考",
-      unknown: "不明",
-      extraHigh: "非常に高い",
-      select: "思考オプションを選択",
-      selectWithValue: "思考オプションを選択（{{value}}）",
+      title: "Thinking",
+      unknown: "Unknown",
+      extraHigh: "Extra high",
+      select: "Select thinking option",
+      selectWithValue: "Select thinking option ({{value}})",
+      levels: { low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" },
     },
     model: {
-      unknown: "不明なモデル",
+      unknown: "Unknown model",
     },
     features: {
-      title: "機能",
-      open: "エージェント機能を開く",
-      on: "オン",
-      off: "オフ",
+      title: "Features",
+      open: "Open agent features",
+      on: "On",
+      off: "Off",
+      known: {
+        fast_mode: {
+          label: "Fast",
+          description: "Lower latency responses at higher token cost",
+          tooltip: "Toggle fast mode",
+        },
+        plan_mode: {
+          label: "Plan",
+          description: "Switch Codex into planning-only collaboration mode",
+          tooltip: "Toggle plan mode",
+        },
+        ultracode: {
+          label: "Ultracode",
+          description: "Use extra-high effort with Claude's dynamic workflow orchestration",
+          tooltip: "Toggle Ultracode",
+        },
+      },
     },
     mode: {
-      title: "モード",
-      searchPlaceholder: "モードを検索...",
-      selectWithValue: "エージェントモードを選択（{{value}}）",
+      title: "Mode",
+      searchPlaceholder: "Search modes...",
+      selectWithValue: "Select agent mode ({{value}})",
+      known: {
+        alwaysAsk: "Always ask",
+        autoMode: "Auto mode",
+        autoReview: "Auto-review",
+        defaultPermissions: "Default permissions",
+        fullAccess: "Full access",
+        acceptFileEdits: "Accept file edits",
+        planMode: "Plan mode",
+        bypass: "Bypass permissions",
+        readOnly: "Read only",
+        dontAsk: "Don't ask",
+      },
     },
     hints: {
-      thinking: "思考モード",
-      model: "モデルを変更",
-      mode: "権限モードを変更",
+      thinking: "Thinking mode",
+      model: "Change model",
+      mode: "Change mode",
+      gateway: "Model gateway",
+    },
+    gateway: {
+      nativeLabel: "Native",
+      fallbackLabel: "Model gateway",
+      sheetTitle: "Model Gateway",
+      selectAccessibilityLabel: "Select model gateway",
+      selectAccessibilityLabelWithValue: "Select model gateway ({{value}})",
     },
   },
   agentStream: {
@@ -303,6 +341,11 @@ export const ja: TranslationResources = {
       manual: "コンテキストが手動で圧縮されました",
       withTokens: "コンテキストを圧縮しました（{{tokens}}Kトークン）",
       completed: "コンテキストを圧縮しました",
+    },
+    footer: {
+      workedFor: "作業時間 {{duration}}",
+      durationEndedAt: "{{duration}}, ended {{timestamp}}",
+      tokenRate: "{{rate}} tok/s",
     },
   },
   importSession: {
@@ -837,6 +880,14 @@ export const ja: TranslationResources = {
     sections: {
       sessions: "履歴",
       schedules: "スケジュール",
+    },
+    sessionsList: {
+      newConversation: "新規チャット",
+      newAgentInWorkspace: "このワークスペースで新規エージェント",
+      history: "履歴",
+      empty: "セッションはまだありません",
+      unknownWorkspace: "その他",
+      renameWorkspace: "ワークスペース名を変更",
     },
     worktreeSetup: {
       title: "ワークツリースクリプトを設定",
@@ -1752,6 +1803,12 @@ export const ja: TranslationResources = {
       },
     },
     appearance: {
+      newTheme: {
+        title: "新しいテーマ",
+        label: "新しいテーマを使用",
+        hint: "下のテーマ選択とは独立して、再設計された明るい外観をアプリ全体に適用します",
+        accessibilityLabel: "新しいテーマを使用",
+      },
       theme: {
         title: "テーマ",
         accessibilityLabel: "テーマ: {{value}}",

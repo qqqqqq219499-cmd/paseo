@@ -571,6 +571,7 @@ function TabChip({
   const tabChipStyle = useCallback(
     () => [
       styles.tab,
+      isActive && styles.tabActiveChip,
       isWeb && isDragging && ({ cursor: "grabbing" } as object),
       {
         minWidth: resolvedTabWidth,
@@ -578,7 +579,7 @@ function TabChip({
         maxWidth: resolvedTabWidth,
       },
     ],
-    [isDragging, resolvedTabWidth],
+    [isActive, isDragging, resolvedTabWidth],
   );
 
   const handleTabHoverIn = useCallback(() => {
@@ -1158,8 +1159,11 @@ function ResolvedDesktopTabChip({
 const styles = StyleSheet.create((theme) => ({
   tabsContainer: {
     minWidth: 0,
-    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
-    borderBottomWidth: 1,
+    // New theme: a taller row (28px chip + 2×8) so each chip's top/bottom inset
+    // matches its left/right inset. Classic: 36.
+    height: theme.shell.floating ? 44 : WORKSPACE_SECONDARY_HEADER_HEIGHT,
+    // New theme drops the bottom divider — the tab row blends into the card.
+    borderBottomWidth: theme.shell.floating ? 0 : 1,
     borderBottomColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
     flexDirection: "row",
@@ -1177,7 +1181,10 @@ const styles = StyleSheet.create((theme) => ({
   },
   tabsContent: {
     flexDirection: "row",
-    alignItems: "stretch",
+    // New theme: center the inset chips and space them apart. Classic: stretch.
+    alignItems: theme.shell.floating ? "center" : "stretch",
+    gap: theme.shell.floating ? theme.spacing[1] : 0,
+    paddingHorizontal: theme.shell.floating ? theme.spacing[2] : 0,
   },
   tabsActions: {
     flexDirection: "row",
@@ -1190,14 +1197,24 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[1],
   },
   tab: {
+    // Classic keeps padding-derived height. New theme: shorter self-contained
+    // rounded chip (centered in the row by tabsContent), no inter-tab divider.
+    height: theme.shell.floating ? 28 : undefined,
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    borderRightWidth: 1,
+    paddingVertical: theme.shell.floating ? 0 : theme.spacing[2],
+    borderRightWidth: theme.shell.floating ? 0 : 1,
     borderRightColor: theme.colors.border,
+    backgroundColor: theme.shell.floating ? theme.colors.surface1 : "transparent",
+    borderRadius: theme.shell.floating ? theme.borderRadius.lg : 0,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
     userSelect: "none",
+  },
+  // New theme: active chip gets a slightly stronger fill (the top accent bar is
+  // hidden). No-op in classic, where the accent bar marks the active tab.
+  tabActiveChip: {
+    backgroundColor: theme.shell.floating ? theme.colors.surface2 : "transparent",
   },
   tabSlot: {
     position: "relative",
@@ -1219,7 +1236,8 @@ const styles = StyleSheet.create((theme) => ({
     top: 0,
     left: 0,
     right: 0,
-    height: 2,
+    // New theme marks the active tab via its fill instead of the top accent bar.
+    height: theme.shell.floating ? 0 : 2,
     backgroundColor: theme.colors.accent,
   },
   tabFocusIndicatorUnfocused: {
@@ -1288,6 +1306,8 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.md,
     alignItems: "center",
     justifyContent: "center",
+    // New theme: a visible rounded-square button (hover still deepens it).
+    backgroundColor: theme.shell.floating ? theme.colors.surface1 : "transparent",
   },
   inlineAddActionButton: {
     width: 28,
@@ -1295,6 +1315,7 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.md,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: theme.shell.floating ? theme.colors.surface1 : "transparent",
   },
   newTabActionButtonDisabled: {
     opacity: 0.5,

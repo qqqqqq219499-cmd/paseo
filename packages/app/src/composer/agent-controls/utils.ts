@@ -78,15 +78,22 @@ export function formatAgentModeLabel(mode: ControlLabelInput): string {
   return formatControlLabel(mode, mode.label == null);
 }
 
+const THINKING_LEVEL_IDS = ["low", "medium", "high", "xhigh", "max"] as const;
+
+function asThinkingLevelId(value: string): (typeof THINKING_LEVEL_IDS)[number] | null {
+  const compact = value.replace(/[\s_-]+/g, "").toLowerCase();
+  if (compact === "extrahigh") return "xhigh";
+  return (THINKING_LEVEL_IDS as readonly string[]).includes(compact)
+    ? (compact as (typeof THINKING_LEVEL_IDS)[number])
+    : null;
+}
+
 export function formatThinkingOptionLabel(option: ControlLabelInput): string {
   const rawLabel = (option.label ?? option.id).trim();
-  const compactId = option.id.replace(/[\s_-]+/g, "").toLowerCase();
-  const compactLabel = rawLabel.replace(/[\s_-]+/g, "").toLowerCase();
-
-  if (compactId === "xhigh" || compactLabel === "xhigh") {
-    return i18n.t("agentControls.thinking.extraHigh");
+  const level = asThinkingLevelId(option.id) ?? asThinkingLevelId(rawLabel);
+  if (level) {
+    return i18n.t(`agentControls.thinking.levels.${level}`);
   }
-
   return formatControlLabel(option, true);
 }
 

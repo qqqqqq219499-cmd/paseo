@@ -28,6 +28,9 @@ export const DEFAULT_CODE_FONT_SIZE = 12; // == FONT_SIZE.code
 export const MIN_CODE_FONT_SIZE = 9;
 export const MAX_CODE_FONT_SIZE = 22; // line-height 1.5×22=33 stays safe
 export const MAX_FONT_FAMILY_LENGTH = 200;
+// The standalone "new theme" ships on by default — new and existing installs
+// alike start on the redesigned look (the toggle lets a user opt back out).
+export const DEFAULT_NEW_THEME_ENABLED = true;
 
 export interface AppSettings {
   theme: ThemeName | "auto";
@@ -41,6 +44,7 @@ export interface AppSettings {
   codeFontSize: number; // clamped px, default 12
   syntaxTheme: SyntaxThemeId; // default "one"
   workspaceTitleSource: WorkspaceTitleSource;
+  newThemeEnabled: boolean; // standalone redesigned "new theme", independent of `theme`
   autoExpandReasoning: boolean;
   toolCallDetailLevel: ToolCallDetailLevel;
 }
@@ -64,6 +68,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   codeFontSize: DEFAULT_CODE_FONT_SIZE,
   syntaxTheme: "one",
   workspaceTitleSource: "title",
+  newThemeEnabled: DEFAULT_NEW_THEME_ENABLED,
   autoExpandReasoning: false,
   toolCallDetailLevel: "detailed",
 };
@@ -238,6 +243,11 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
     VALID_WORKSPACE_TITLE_SOURCES.has(stored.workspaceTitleSource)
   ) {
     result.workspaceTitleSource = stored.workspaceTitleSource;
+  }
+  // Device-local: deliberately NOT synced across devices — toggling the new
+  // theme on one device does not propagate to others.
+  if (typeof stored.newThemeEnabled === "boolean") {
+    result.newThemeEnabled = stored.newThemeEnabled;
   }
   if (typeof stored.autoExpandReasoning === "boolean") {
     result.autoExpandReasoning = stored.autoExpandReasoning;

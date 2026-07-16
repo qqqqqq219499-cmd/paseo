@@ -10,7 +10,7 @@ import {
   useIsCompactFormFactor,
 } from "@/constants/layout";
 import { WindowChromeSafeArea } from "@/utils/desktop-window";
-import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
+import { electronDragStyle, TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 
 interface ScreenHeaderProps {
   left?: ReactNode;
@@ -18,6 +18,10 @@ interface ScreenHeaderProps {
   leftStyle?: StyleProp<ViewStyle>;
   rightStyle?: StyleProp<ViewStyle>;
   borderless?: boolean;
+  // Override the outer header surface (e.g. expose it on a different backdrop).
+  surfaceStyle?: StyleProp<ViewStyle>;
+  // Override the inner row (e.g. drop the bottom divider). Applied last so it wins.
+  rowStyle?: StyleProp<ViewStyle>;
   onRowLayout?: (event: LayoutChangeEvent) => void;
 }
 
@@ -31,6 +35,8 @@ export function ScreenHeader({
   leftStyle,
   rightStyle,
   borderless,
+  surfaceStyle,
+  rowStyle,
   onRowLayout,
 }: ScreenHeaderProps) {
   const { theme } = useUnistyles();
@@ -44,18 +50,32 @@ export function ScreenHeader({
     () => [styles.inner, { paddingTop: insets.top + topPadding }],
     [insets.top, topPadding],
   );
-  const rowStyle = useMemo(() => [styles.row, borderless && styles.borderless], [borderless]);
-  const leftCombinedStyle = useMemo(() => [styles.left, leftStyle], [leftStyle]);
-  const rightCombinedStyle = useMemo(() => [styles.right, rightStyle], [rightStyle]);
+  const rowCombinedStyle = useMemo(
+    () => [styles.row, borderless && styles.borderless, electronDragStyle, rowStyle],
+    [borderless, rowStyle],
+  );
+  // box-none: empty flex gaps pass hits to the drag region; buttons still receive presses.
+  const leftCombinedStyle = useMemo(
+    () => [styles.left, { pointerEvents: "box-none" as const }, leftStyle],
+    [leftStyle],
+  );
+  const rightCombinedStyle = useMemo(
+    () => [styles.right, { pointerEvents: "box-none" as const }, rightStyle],
+    [rightStyle],
+  );
+  const headerCombinedStyle = useMemo(
+    () => [styles.header, electronDragStyle, surfaceStyle],
+    [surfaceStyle],
+  );
 
   return (
-    <View style={styles.header}>
-      <View style={innerStyle}>
+    <View style={headerCombinedStyle}>
+      <View style={innerStyle} pointerEvents="box-none">
         <WindowChromeSafeArea
           placement="inline"
           horizontalPadding={baseHorizontalPadding}
           onLayout={onRowLayout}
-          style={rowStyle}
+          style={rowCombinedStyle}
         >
           <TitlebarDragRegion />
           <View style={leftCombinedStyle}>{left}</View>

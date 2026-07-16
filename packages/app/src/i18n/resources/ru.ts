@@ -139,34 +139,72 @@ export const ru: TranslationResources = {
   },
   agentControls: {
     provider: {
-      fallback: "Поставщик",
-      select: "Выберите поставщика агентов",
+      fallback: "Provider",
+      select: "Select agent provider",
     },
     thinking: {
-      title: "мышление",
-      unknown: "Неизвестный",
-      extraHigh: "Очень высокий",
-      select: "Выберите вариант мышления",
-      selectWithValue: "Выберите вариант мышления ({{value}})",
+      title: "Thinking",
+      unknown: "Unknown",
+      extraHigh: "Extra high",
+      select: "Select thinking option",
+      selectWithValue: "Select thinking option ({{value}})",
+      levels: { low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" },
     },
     model: {
-      unknown: "Неизвестная модель",
+      unknown: "Unknown model",
     },
     features: {
-      title: "Функции",
-      open: "Открытые возможности агента",
-      on: "На",
-      off: "Выключенный",
+      title: "Features",
+      open: "Open agent features",
+      on: "On",
+      off: "Off",
+      known: {
+        fast_mode: {
+          label: "Fast",
+          description: "Lower latency responses at higher token cost",
+          tooltip: "Toggle fast mode",
+        },
+        plan_mode: {
+          label: "Plan",
+          description: "Switch Codex into planning-only collaboration mode",
+          tooltip: "Toggle plan mode",
+        },
+        ultracode: {
+          label: "Ultracode",
+          description: "Use extra-high effort with Claude's dynamic workflow orchestration",
+          tooltip: "Toggle Ultracode",
+        },
+      },
     },
     mode: {
-      title: "Режим",
-      searchPlaceholder: "Режимы поиска...",
-      selectWithValue: "Выберите режим агента ({{value}})",
+      title: "Mode",
+      searchPlaceholder: "Search modes...",
+      selectWithValue: "Select agent mode ({{value}})",
+      known: {
+        alwaysAsk: "Always ask",
+        autoMode: "Auto mode",
+        autoReview: "Auto-review",
+        defaultPermissions: "Default permissions",
+        fullAccess: "Full access",
+        acceptFileEdits: "Accept file edits",
+        planMode: "Plan mode",
+        bypass: "Bypass permissions",
+        readOnly: "Read only",
+        dontAsk: "Don't ask",
+      },
     },
     hints: {
-      thinking: "Режим мышления",
-      model: "Изменить модель",
-      mode: "Изменить режим",
+      thinking: "Thinking mode",
+      model: "Change model",
+      mode: "Change mode",
+      gateway: "Model gateway",
+    },
+    gateway: {
+      nativeLabel: "Native",
+      fallbackLabel: "Model gateway",
+      sheetTitle: "Model Gateway",
+      selectAccessibilityLabel: "Select model gateway",
+      selectAccessibilityLabelWithValue: "Select model gateway ({{value}})",
     },
   },
   agentStream: {
@@ -302,6 +340,11 @@ export const ru: TranslationResources = {
       manual: "Контекст сжимается вручную",
       withTokens: "Сжатый контекст (токены{{tokens}}K)",
       completed: "Контекст сжат",
+    },
+    footer: {
+      workedFor: "Работал {{duration}}",
+      durationEndedAt: "{{duration}}, ended {{timestamp}}",
+      tokenRate: "{{rate}} tok/s",
     },
   },
   importSession: {
@@ -844,6 +887,14 @@ export const ru: TranslationResources = {
     sections: {
       sessions: "История",
       schedules: "Расписания",
+    },
+    sessionsList: {
+      newConversation: "Новый чат",
+      newAgentInWorkspace: "Новый агент в этом рабочем пространстве",
+      history: "История",
+      empty: "Пока нет сессий",
+      unknownWorkspace: "Прочее",
+      renameWorkspace: "Переименовать рабочее пространство",
     },
     worktreeSetup: {
       title: "Настройка сценариев рабочего дерева",
@@ -1768,6 +1819,12 @@ export const ru: TranslationResources = {
       },
     },
     appearance: {
+      newTheme: {
+        title: "Новая тема",
+        label: "Использовать новую тему",
+        hint: "Применяет переработанный светлый вид во всём приложении, независимо от темы ниже",
+        accessibilityLabel: "Использовать новую тему",
+      },
       theme: {
         title: "Тема",
         accessibilityLabel: "Тема:{{value}}",

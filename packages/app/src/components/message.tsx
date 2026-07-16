@@ -624,9 +624,13 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
     };
   }, []);
 
+  const { t } = useTranslation();
   const durationLabel = useMemo(
-    () => (durationMs !== undefined ? `Worked for ${formatDuration(durationMs)}` : ""),
-    [durationMs],
+    () =>
+      durationMs !== undefined
+        ? t("message.footer.workedFor", { duration: formatDuration(durationMs) })
+        : "",
+    [durationMs, t],
   );
   const timestampLabel = useMemo(
     () => (completedAt ? formatMessageTimestamp(completedAt) : ""),

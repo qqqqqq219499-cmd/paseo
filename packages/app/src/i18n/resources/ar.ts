@@ -139,34 +139,72 @@ export const ar: TranslationResources = {
   },
   agentControls: {
     provider: {
-      fallback: "مزود",
-      select: "حدد مزود الوكيل",
+      fallback: "Provider",
+      select: "Select agent provider",
     },
     thinking: {
-      title: "التفكير",
-      unknown: "مجهول",
-      extraHigh: "ارتفاع إضافي",
-      select: "حدد خيار التفكير",
-      selectWithValue: "حدد خيار التفكير ({{value}})",
+      title: "Thinking",
+      unknown: "Unknown",
+      extraHigh: "Extra high",
+      select: "Select thinking option",
+      selectWithValue: "Select thinking option ({{value}})",
+      levels: { low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" },
     },
     model: {
-      unknown: "نموذج غير معروف",
+      unknown: "Unknown model",
     },
     features: {
-      title: "سمات",
-      open: "ميزات الوكيل المفتوح",
-      on: "على",
-      off: "عن",
+      title: "Features",
+      open: "Open agent features",
+      on: "On",
+      off: "Off",
+      known: {
+        fast_mode: {
+          label: "Fast",
+          description: "Lower latency responses at higher token cost",
+          tooltip: "Toggle fast mode",
+        },
+        plan_mode: {
+          label: "Plan",
+          description: "Switch Codex into planning-only collaboration mode",
+          tooltip: "Toggle plan mode",
+        },
+        ultracode: {
+          label: "Ultracode",
+          description: "Use extra-high effort with Claude's dynamic workflow orchestration",
+          tooltip: "Toggle Ultracode",
+        },
+      },
     },
     mode: {
-      title: "وضع",
-      searchPlaceholder: "أوضاع البحث...",
-      selectWithValue: "حدد وضع الوكيل ({{value}})",
+      title: "Mode",
+      searchPlaceholder: "Search modes...",
+      selectWithValue: "Select agent mode ({{value}})",
+      known: {
+        alwaysAsk: "Always ask",
+        autoMode: "Auto mode",
+        autoReview: "Auto-review",
+        defaultPermissions: "Default permissions",
+        fullAccess: "Full access",
+        acceptFileEdits: "Accept file edits",
+        planMode: "Plan mode",
+        bypass: "Bypass permissions",
+        readOnly: "Read only",
+        dontAsk: "Don't ask",
+      },
     },
     hints: {
-      thinking: "وضع التفكير",
-      model: "تغيير النموذج",
-      mode: "تغيير الوضع",
+      thinking: "Thinking mode",
+      model: "Change model",
+      mode: "Change mode",
+      gateway: "Model gateway",
+    },
+    gateway: {
+      nativeLabel: "Native",
+      fallbackLabel: "Model gateway",
+      sheetTitle: "Model Gateway",
+      selectAccessibilityLabel: "Select model gateway",
+      selectAccessibilityLabelWithValue: "Select model gateway ({{value}})",
     },
   },
   agentStream: {
@@ -300,6 +338,11 @@ export const ar: TranslationResources = {
       manual: "تم ضغط السياق يدويًا",
       withTokens: "تم ضغط السياق (رموز{{tokens}}K)",
       completed: "تم ضغط السياق",
+    },
+    footer: {
+      workedFor: "عمل لمدة {{duration}}",
+      durationEndedAt: "{{duration}}, ended {{timestamp}}",
+      tokenRate: "{{rate}} tok/s",
     },
   },
   importSession: {
@@ -825,6 +868,14 @@ export const ar: TranslationResources = {
     sections: {
       sessions: "السجل",
       schedules: "الجداول",
+    },
+    sessionsList: {
+      newConversation: "محادثة جديدة",
+      newAgentInWorkspace: "وكيل جديد في مساحة العمل هذه",
+      history: "السجل",
+      empty: "لا توجد جلسات بعد",
+      unknownWorkspace: "أخرى",
+      renameWorkspace: "إعادة تسمية مساحة العمل",
     },
     worktreeSetup: {
       title: "إعداد البرامج النصية لشجرة العمل",
@@ -1736,6 +1787,12 @@ export const ar: TranslationResources = {
       },
     },
     appearance: {
+      newTheme: {
+        title: "سمة جديدة",
+        label: "استخدام السمة الجديدة",
+        hint: "تطبيق المظهر الفاتح المُعاد تصميمه على التطبيق بالكامل، بشكل مستقل عن السمة أدناه",
+        accessibilityLabel: "استخدام السمة الجديدة",
+      },
       theme: {
         title: "سمة",
         accessibilityLabel: "الموضوع:{{value}}",

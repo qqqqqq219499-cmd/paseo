@@ -139,34 +139,72 @@ export const es: TranslationResources = {
   },
   agentControls: {
     provider: {
-      fallback: "Proveedor",
-      select: "Seleccionar proveedor de agente",
+      fallback: "Provider",
+      select: "Select agent provider",
     },
     thinking: {
-      title: "Pensamiento",
-      unknown: "Desconocido",
-      extraHigh: "extra alto",
-      select: "Seleccione la opción de pensamiento",
-      selectWithValue: "Seleccione la opción de pensamiento ({{value}})",
+      title: "Thinking",
+      unknown: "Unknown",
+      extraHigh: "Extra high",
+      select: "Select thinking option",
+      selectWithValue: "Select thinking option ({{value}})",
+      levels: { low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" },
     },
     model: {
-      unknown: "Modelo desconocido",
+      unknown: "Unknown model",
     },
     features: {
-      title: "Características",
-      open: "Funciones de agente abierto",
-      on: "En",
-      off: "Apagado",
+      title: "Features",
+      open: "Open agent features",
+      on: "On",
+      off: "Off",
+      known: {
+        fast_mode: {
+          label: "Fast",
+          description: "Lower latency responses at higher token cost",
+          tooltip: "Toggle fast mode",
+        },
+        plan_mode: {
+          label: "Plan",
+          description: "Switch Codex into planning-only collaboration mode",
+          tooltip: "Toggle plan mode",
+        },
+        ultracode: {
+          label: "Ultracode",
+          description: "Use extra-high effort with Claude's dynamic workflow orchestration",
+          tooltip: "Toggle Ultracode",
+        },
+      },
     },
     mode: {
-      title: "Modo",
-      searchPlaceholder: "Modos de búsqueda...",
-      selectWithValue: "Seleccione el modo de agente ({{value}})",
+      title: "Mode",
+      searchPlaceholder: "Search modes...",
+      selectWithValue: "Select agent mode ({{value}})",
+      known: {
+        alwaysAsk: "Always ask",
+        autoMode: "Auto mode",
+        autoReview: "Auto-review",
+        defaultPermissions: "Default permissions",
+        fullAccess: "Full access",
+        acceptFileEdits: "Accept file edits",
+        planMode: "Plan mode",
+        bypass: "Bypass permissions",
+        readOnly: "Read only",
+        dontAsk: "Don't ask",
+      },
     },
     hints: {
-      thinking: "Modo de pensamiento",
-      model: "Cambiar modelo",
-      mode: "Cambiar modo",
+      thinking: "Thinking mode",
+      model: "Change model",
+      mode: "Change mode",
+      gateway: "Model gateway",
+    },
+    gateway: {
+      nativeLabel: "Native",
+      fallbackLabel: "Model gateway",
+      sheetTitle: "Model Gateway",
+      selectAccessibilityLabel: "Select model gateway",
+      selectAccessibilityLabelWithValue: "Select model gateway ({{value}})",
     },
   },
   agentStream: {
@@ -303,6 +341,11 @@ export const es: TranslationResources = {
       manual: "Contexto compactado manualmente",
       withTokens: "Contexto compactado (tokens{{tokens}}K)",
       completed: "Contexto compactado",
+    },
+    footer: {
+      workedFor: "Trabajó durante {{duration}}",
+      durationEndedAt: "{{duration}}, ended {{timestamp}}",
+      tokenRate: "{{rate}} tok/s",
     },
   },
   importSession: {
@@ -852,6 +895,14 @@ export const es: TranslationResources = {
     sections: {
       sessions: "Historial",
       schedules: "Horarios",
+    },
+    sessionsList: {
+      newConversation: "Nuevo chat",
+      newAgentInWorkspace: "Nuevo agente en este espacio de trabajo",
+      history: "Historial",
+      empty: "Aún no hay sesiones",
+      unknownWorkspace: "Otros",
+      renameWorkspace: "Renombrar espacio de trabajo",
     },
     worktreeSetup: {
       title: "Configurar secuencias de comandos del árbol de trabajo",
@@ -1781,6 +1832,12 @@ export const es: TranslationResources = {
       },
     },
     appearance: {
+      newTheme: {
+        title: "Tema nuevo",
+        label: "Usar el tema nuevo",
+        hint: "Aplica el nuevo aspecto claro rediseñado en toda la app, independiente del tema de abajo",
+        accessibilityLabel: "Usar el tema nuevo",
+      },
       theme: {
         title: "Tema",
         accessibilityLabel: "Tema:{{value}}",

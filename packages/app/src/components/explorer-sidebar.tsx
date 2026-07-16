@@ -31,7 +31,7 @@ import { GitDiffPane } from "@/git/diff-pane";
 import { FileExplorerPane } from "./file-explorer-pane";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { useHasOwnedWindowChromeObstruction, WindowChromeSafeArea } from "@/utils/desktop-window";
-import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
+import { electronDragStyle, TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { RetainedPanelActivity } from "@/components/retained-panel";
 import { isWeb } from "@/constants/platform";
 import { buildWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
@@ -310,14 +310,18 @@ function ExplorerSidebarContent({
     () => buildWorkspaceAttachmentScopeKey({ serverId, workspaceId, cwd: workspaceRoot }),
     [serverId, workspaceId, workspaceRoot],
   );
+  const sidebarContentStyle = useMemo(() => [styles.sidebarContent, electronDragStyle], []);
+  const explorerHeaderStyle = useMemo(() => [styles.header, electronDragStyle], []);
 
   return (
-    <View style={styles.sidebarContent} pointerEvents="auto">
+    <View style={sidebarContentStyle} pointerEvents="auto">
+      {/* Whole-panel chrome is drag; file rows / tabs stay no-drag via Pressable. */}
+      <TitlebarDragRegion />
       {/* Header with tabs and close button */}
       <WindowChromeSafeArea
         placement="inline"
         horizontalPadding={theme.spacing[2]}
-        style={styles.header}
+        style={explorerHeaderStyle}
         testID="explorer-header"
       >
         <TitlebarDragRegion />
@@ -455,7 +459,8 @@ const explorerStaticStyles = RNStyleSheet.create({
 
 const styles = StyleSheet.create((theme) => ({
   desktopSidebarBorder: {
-    borderLeftWidth: 1,
+    // Shell chrome-divider token: 1px classic, 0 new theme.
+    borderLeftWidth: theme.shell.chromeDivider,
     borderLeftColor: theme.colors.border,
     backgroundColor: theme.colors.surfaceSidebar,
   },
@@ -471,6 +476,7 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minHeight: 0,
     overflow: "hidden",
+    position: "relative",
   },
   header: {
     position: "relative",
@@ -478,7 +484,8 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottomWidth: 1,
+    // New theme drops the tab-bar underline (chromeDivider = 0); classic keeps 1.
+    borderBottomWidth: theme.shell.chromeDivider,
     borderBottomColor: theme.colors.border,
   },
   tabsContainer: {
@@ -491,7 +498,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.shell.floating ? theme.shell.contentRadius : theme.borderRadius.md,
   },
   tabActive: {
     backgroundColor: theme.colors.surfaceSidebarHover,

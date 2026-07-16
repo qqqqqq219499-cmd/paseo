@@ -36,6 +36,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import { formatAgentModeLabel, getAgentControlHintKey } from "@/composer/agent-controls/utils";
+import { localizeAgentModeLabel } from "@/composer/agent-controls/localize";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
@@ -142,11 +143,17 @@ function AgentModeControlView({
     : undefined;
   const Icon = visuals?.icon ? MODE_ICONS[visuals.icon] : undefined;
   const iconColor = theme.colors.foregroundMuted;
-  const selectedModeLabel = selectedMode ? formatAgentModeLabel(selectedMode) : "";
+  const selectedModeLabel = selectedMode
+    ? localizeAgentModeLabel(t, selectedMode, formatAgentModeLabel)
+    : "";
 
   const allOptions = useMemo<ComboboxOption[]>(
-    () => modeOptions.map((m) => ({ id: m.id, label: formatAgentModeLabel(m) })),
-    [modeOptions],
+    () =>
+      modeOptions.map((m) => ({
+        id: m.id,
+        label: localizeAgentModeLabel(t, m, formatAgentModeLabel),
+      })),
+    [modeOptions, t],
   );
   const options = useMemo<ComboboxOption[]>(() => {
     const q = normalizeSearchQuery(searchQuery);

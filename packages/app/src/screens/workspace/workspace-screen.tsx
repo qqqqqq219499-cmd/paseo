@@ -63,6 +63,11 @@ import { ExplorerSidebar } from "@/components/explorer-sidebar";
 import { SplitContainer } from "@/components/split-container";
 import { RetainedPanel } from "@/components/retained-panel";
 import { WindowChromeRegion } from "@/utils/desktop-window";
+import {
+  electronDragStyle,
+  electronNoDragStyle,
+  TitlebarDragRegion,
+} from "@/components/desktop/titlebar-drag-region";
 import { SourceControlPanelIcon } from "@/components/icons/source-control-panel-icon";
 import { WorkspaceActions } from "@/git/workspace-actions";
 import { WorkspaceOpenInEditorButton } from "@/screens/workspace/workspace-open-in-editor-button";
@@ -167,7 +172,13 @@ import {
 } from "@/screens/workspace/workspace-bulk-close";
 import { resolveCloseAgentTabPolicy } from "@/subagents";
 import { findAdjacentPane } from "@/utils/split-navigation";
-import { useIsCompactFormFactor, supportsDesktopPaneSplits } from "@/constants/layout";
+import {
+  HEADER_INNER_HEIGHT,
+  HEADER_INNER_HEIGHT_MOBILE,
+  NEW_THEME_HEADER_HEIGHT_DESKTOP,
+  useIsCompactFormFactor,
+  supportsDesktopPaneSplits,
+} from "@/constants/layout";
 import { getIsElectron, isNative, isWeb } from "@/constants/platform";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import {
@@ -3570,54 +3581,12 @@ function WorkspaceScreenContent({
   ]);
   const desktopContent = desktopSplitContent ?? content;
 
-  const workspaceCenterColumn = (
-    <View style={styles.centerColumn}>
-      {showScreenHeader && (
-        <ScreenHeader
-          onRowLayout={onHeaderLayout}
-          left={
-            <>
-              <SidebarMenuToggle />
-              <WorkspaceHeaderTitleBar
-                isLoading={isWorkspaceHeaderLoading}
-                title={workspaceHeaderTitle}
-                subtitle={workspaceHeaderSubtitle}
-                showSubtitle={shouldShowWorkspaceHeaderSubtitle}
-                currentBranchName={currentBranchName}
-                normalizedServerId={normalizedServerId}
-                normalizedWorkspaceId={normalizedWorkspaceId}
-                workspaceScripts={workspaceScripts}
-                liveTerminalIds={liveTerminalIds}
-                showWorkspaceSetup={showWorkspaceSetup}
-                showCreateBrowserTab={showCreateBrowserTab}
-                isMobile={isMobile}
-                createTerminalDisabled={createTerminalDisabled}
-                importAgentDisabled={!canOpenImportSheet}
-                copyPathDisabled={!workspaceDirectory}
-                menuNewAgentIcon={menuNewAgentIcon}
-                menuNewTerminalIcon={menuNewTerminalIcon}
-                menuNewBrowserIcon={MENU_NEW_BROWSER_ICON}
-                menuImportIcon={MENU_IMPORT_ICON}
-                menuCopyIcon={menuCopyIcon}
-                menuSettingsIcon={menuSettingsIcon}
-                onCreateDraftTab={handleCreateDraftTab}
-                onCreateTerminal={handleCreateTerminal}
-                onCreateTerminalWithProfile={handleCreateTerminalWithProfile}
-                onCreateBrowser={handleCreateBrowserTab}
-                onOpenImportSheet={openImportSheet}
-                onCopyWorkspacePath={handleCopyWorkspacePath}
-                onCopyBranchName={handleCopyBranchName}
-                onOpenSetupTab={handleOpenSetupTab}
-                onScriptTerminalStarted={handleScriptTerminalStarted}
-                onViewScriptTerminal={handleViewScriptTerminal}
-                onOpenUrlInBrowserTab={handleOpenUrlInBrowserTab}
-              />
-            </>
-          }
-          right={headerRight}
-        />
-      )}
-
+  // Tabs + panes live in the floating card. Extracted so the return tree stays
+  // under the jsx-max-depth lint ceiling (ScreenHeader sits above the card).
+  const centerCardStyle = useMemo(() => [styles.centerCard, electronNoDragStyle], []);
+  const centerColumnStyle = useMemo(() => [styles.centerColumn, electronDragStyle], []);
+  const centerPaneContent = (
+    <View style={centerCardStyle}>
       {isMobile ? (
         <MobileWorkspaceTabSwitcher
           tabs={tabs}
@@ -3671,54 +3640,110 @@ function WorkspaceScreenContent({
         />
       ) : null}
 
-      <View style={styles.centerContent}>
-        {isMobile ? (
-          <View style={styles.content}>{content}</View>
-        ) : (
-          <View style={styles.content}>{desktopContent}</View>
-        )}
-      </View>
+      <View style={styles.content}>{isMobile ? content : desktopContent}</View>
+    </View>
+  );
+
+  const workspaceHeaderLeft = (
+    <>
+      <SidebarMenuToggle />
+      <WorkspaceHeaderTitleBar
+        isLoading={isWorkspaceHeaderLoading}
+        title={workspaceHeaderTitle}
+        subtitle={workspaceHeaderSubtitle}
+        showSubtitle={shouldShowWorkspaceHeaderSubtitle}
+        currentBranchName={currentBranchName}
+        normalizedServerId={normalizedServerId}
+        normalizedWorkspaceId={normalizedWorkspaceId}
+        workspaceScripts={workspaceScripts}
+        liveTerminalIds={liveTerminalIds}
+        showWorkspaceSetup={showWorkspaceSetup}
+        showCreateBrowserTab={showCreateBrowserTab}
+        isMobile={isMobile}
+        createTerminalDisabled={createTerminalDisabled}
+        importAgentDisabled={!canOpenImportSheet}
+        copyPathDisabled={!workspaceDirectory}
+        menuNewAgentIcon={menuNewAgentIcon}
+        menuNewTerminalIcon={menuNewTerminalIcon}
+        menuNewBrowserIcon={MENU_NEW_BROWSER_ICON}
+        menuImportIcon={MENU_IMPORT_ICON}
+        menuCopyIcon={menuCopyIcon}
+        menuSettingsIcon={menuSettingsIcon}
+        onCreateDraftTab={handleCreateDraftTab}
+        onCreateTerminal={handleCreateTerminal}
+        onCreateTerminalWithProfile={handleCreateTerminalWithProfile}
+        onCreateBrowser={handleCreateBrowserTab}
+        onOpenImportSheet={openImportSheet}
+        onCopyWorkspacePath={handleCopyWorkspacePath}
+        onCopyBranchName={handleCopyBranchName}
+        onOpenSetupTab={handleOpenSetupTab}
+        onScriptTerminalStarted={handleScriptTerminalStarted}
+        onViewScriptTerminal={handleViewScriptTerminal}
+        onOpenUrlInBrowserTab={handleOpenUrlInBrowserTab}
+      />
+    </>
+  );
+
+  const workspaceCenterColumn = (
+    <View style={centerColumnStyle}>
+      {/* Shell underlay is drag; centerCard is no-drag so chat/terminal stay interactive.
+          Margins around the floating card move the window. */}
+      <TitlebarDragRegion />
+      {showScreenHeader ? (
+        <ScreenHeader
+          onRowLayout={onHeaderLayout}
+          surfaceStyle={styles.headerSurface}
+          rowStyle={styles.headerRow}
+          left={workspaceHeaderLeft}
+          right={headerRight}
+        />
+      ) : null}
+      {centerPaneContent}
+    </View>
+  );
+
+  // Isolated so FocusProvider/RenderProfile don't push WorkspaceChromeRow over
+  // the jsx-max-depth ceiling when the floating card adds a layout layer.
+  const workspaceScreenBody = (
+    <View style={containerStyle}>
+      <WorkspaceDocumentTitleEffectSlot
+        tab={activeTabDescriptor}
+        serverId={normalizedServerId}
+        workspaceId={normalizedWorkspaceId}
+        isRouteFocused={isRouteFocused}
+      />
+      <WorkspaceChromeRow
+        portalHostName={workspaceFloatingPanelPortalHostName}
+        showExplorerSidebar={showExplorerSidebar}
+        explorerOpen={isExplorerOpen}
+        serverId={normalizedServerId}
+        workspaceId={normalizedWorkspaceId}
+        workspaceRoot={workspaceDirectory}
+        isGit={isGitCheckout}
+        onOpenFile={handleOpenFileFromExplorer}
+      >
+        {workspaceCenterColumn}
+      </WorkspaceChromeRow>
+      <ImportSessionSheet
+        visible={isImportSheetVisible}
+        client={client}
+        serverId={normalizedServerId}
+        cwd={workspaceDirectory}
+        onClose={closeImportSheet}
+        onImportedAgent={handleImportedAgent}
+      />
+      <WorkspaceTabRenameModal
+        renamingTab={renamingTab}
+        onSubmit={handleRenameModalSubmit}
+        onClose={handleRenameModalClose}
+      />
     </View>
   );
 
   return (
     gatedWorkspaceScreen ?? (
       <WorkspaceFocusProvider workspaceKey={persistenceKey}>
-        <RenderProfile id="WorkspaceScreenContent">
-          <View style={containerStyle}>
-            <WorkspaceDocumentTitleEffectSlot
-              tab={activeTabDescriptor}
-              serverId={normalizedServerId}
-              workspaceId={normalizedWorkspaceId}
-              isRouteFocused={isRouteFocused}
-            />
-            <WorkspaceChromeRow
-              portalHostName={workspaceFloatingPanelPortalHostName}
-              showExplorerSidebar={showExplorerSidebar}
-              explorerOpen={isExplorerOpen}
-              serverId={normalizedServerId}
-              workspaceId={normalizedWorkspaceId}
-              workspaceRoot={workspaceDirectory}
-              isGit={isGitCheckout}
-              onOpenFile={handleOpenFileFromExplorer}
-            >
-              {workspaceCenterColumn}
-            </WorkspaceChromeRow>
-            <ImportSessionSheet
-              visible={isImportSheetVisible}
-              client={client}
-              serverId={normalizedServerId}
-              cwd={workspaceDirectory}
-              onClose={closeImportSheet}
-              onImportedAgent={handleImportedAgent}
-            />
-            <WorkspaceTabRenameModal
-              renamingTab={renamingTab}
-              onSubmit={handleRenameModalSubmit}
-              onClose={handleRenameModalClose}
-            />
-          </View>
-        </RenderProfile>
+        <RenderProfile id="WorkspaceScreenContent">{workspaceScreenBody}</RenderProfile>
       </WorkspaceFocusProvider>
     )
   );
@@ -3732,15 +3757,54 @@ const styles = StyleSheet.create((theme) => ({
   containerWorkspaceBackground: {
     backgroundColor: theme.colors.surfaceWorkspace,
   },
+  // Shell underlay revealed in the floating content card's margins. Equals
+  // surface0 in classic themes (invisible behind flush content) and #fafafa in
+  // the new theme.
   threePaneRow: {
     flex: 1,
     minHeight: 0,
     flexDirection: "row",
     alignItems: "stretch",
+    backgroundColor: theme.colors.surfaceShell,
   },
+  // Holds the exposed workspace header (on the shell underlay) above the
+  // floating content card. Classic: surfaceShell == surface0, flush.
+  // position relative so TitlebarDragRegion can fill the shell underlay.
   centerColumn: {
     flex: 1,
     minHeight: 0,
+    position: "relative",
+    backgroundColor: theme.colors.surfaceShell,
+  },
+  // Workspace header exposed on the shell underlay. Desktop uses surfaceShell /
+  // chromeDivider; compact stays on surface0 with a normal divider height.
+  headerSurface: {
+    backgroundColor: {
+      xs: theme.colors.surface0,
+      md: theme.colors.surfaceShell,
+    },
+  },
+  headerRow: {
+    borderBottomWidth: theme.shell.chromeDivider,
+    height: {
+      xs: HEADER_INNER_HEIGHT_MOBILE,
+      md: theme.shell.floating ? NEW_THEME_HEADER_HEIGHT_DESKTOP : HEADER_INNER_HEIGHT,
+    },
+  },
+  // Floating content card wrapping tabs + panes. Breakpoint-gated so compact
+  // stays full-bleed; classic shell tokens are 0/0/visible so md+ is flush too.
+  // Also carries the old centerContent flex so we don't need an extra wrapper
+  // (keeps jsx-max-depth happy). Marked no-drag at the call site so shell
+  // margins on the parent stay window-draggable.
+  centerCard: {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: theme.shell.floating ? theme.colors.surfaceWorkspace : "transparent",
+    marginTop: 0,
+    marginHorizontal: { xs: 0, md: theme.shell.contentMargin },
+    marginBottom: { xs: 0, md: theme.shell.contentMargin },
+    borderRadius: { xs: 0, md: theme.shell.contentRadius },
+    overflow: { xs: "visible", md: theme.shell.contentOverflow },
   },
   headerTitle: {
     fontSize: theme.fontSize.base,

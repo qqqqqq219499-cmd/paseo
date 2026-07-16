@@ -1011,7 +1011,7 @@ const styles = StyleSheet.create((theme) => ({
     flex: 0,
     flexGrow: 0,
     flexShrink: 0,
-    borderLeftWidth: 1,
+    borderLeftWidth: theme.shell.chromeDivider,
     borderLeftColor: theme.colors.border,
   },
   splitResizeHandle: {
@@ -1032,7 +1032,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
     paddingRight: theme.spacing[3],
-    borderBottomWidth: 1,
+    borderBottomWidth: theme.shell.chromeDivider,
     borderBottomColor: theme.colors.border,
   },
   sortTrigger: {
@@ -1114,7 +1114,7 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "space-between",
     paddingVertical: 2,
     paddingRight: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.shell.floating ? theme.shell.contentRadius : theme.borderRadius.md,
   },
   entryRowActive: {
     backgroundColor: theme.colors.surfaceSidebarHover,
@@ -1233,7 +1233,7 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "space-between",
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
-    borderBottomWidth: theme.borderWidth[1],
+    borderBottomWidth: theme.shell.chromeDivider,
     borderBottomColor: theme.colors.border,
   },
   sheetTitle: {

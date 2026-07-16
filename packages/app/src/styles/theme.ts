@@ -149,6 +149,7 @@ const lightSemanticColors = {
   surfaceSidebar: "#f4f4f5", // Sidebar background (darker than main)
   surfaceSidebarHover: "#e9e9ec", // Sidebar hover (darker in light mode)
   surfaceWorkspace: "#ffffff", // Workspace main background
+  surfaceShell: "#ffffff", // Shell underlay + exposed-header surface (= surface0 in classic)
 
   // Text
   foreground: "#1a1a1e",
@@ -217,6 +218,26 @@ const lightSemanticColors = {
   },
 } as const;
 
+// New theme — a standalone light look toggled independently of the theme
+// dropdown (see `settings.newThemeEnabled`). Derived from the default light
+// theme so it inherits every token by default; only the deltas of the new
+// design live here. This is the single place to grow the new theme — add
+// overrides to this object as the redesign expands beyond the sidebar.
+const newThemeSemanticColors = {
+  ...lightSemanticColors,
+  // All non-content sidebar/chrome surfaces sit on a near-white #fafafa, one
+  // hair off the #ffffff main content area for a quiet, modern separation.
+  surfaceSidebar: "#fafafa",
+  // The shell underlay (behind the floating content card) is the same #fafafa,
+  // so sidebars + the margins around the card read as one continuous backdrop.
+  surfaceShell: "#fafafa",
+  // Scrollbar handle is #fafafa too, so the native + overlay scrollbars melt
+  // into the #fafafa chrome instead of cutting a darker bar across it. Both the
+  // CSS scrollbar (use-web-scrollbar-style.web.ts) and the desktop overlay
+  // (web-desktop-scrollbar.tsx) read this token, so the new theme owns both.
+  scrollbarHandle: "#fafafa",
+} as const;
+
 // ---------------------------------------------------------------------------
 // Dark theme variant builder
 // ---------------------------------------------------------------------------
@@ -268,6 +289,7 @@ function buildDarkSemanticColors(tint: DarkThemeConfig) {
     surfaceSidebar: tint.surfaceSidebar,
     surfaceSidebarHover: tint.surfaceSidebarHover,
     surfaceWorkspace: tint.surface1,
+    surfaceShell: tint.surface0, // Shell underlay + exposed-header surface (= surface0 in classic)
 
     foreground: "#fafafa",
     foregroundMuted: tint.foregroundMuted,
@@ -515,6 +537,18 @@ interface CommonTheme {
   borderRadius: typeof BORDER_RADIUS;
   borderWidth: typeof BORDER_WIDTH;
   opacity: typeof OPACITY;
+  // Shell chrome layout — drives whether the content (tabs + panes) floats as an
+  // inset rounded card with bordered-less sidebars (new theme) or fills edge-to-edge
+  // with bordered sidebars (classic). Patched per-theme so the layout reacts through
+  // Unistyles with no React re-render, gated to whichever theme is active.
+  shell: {
+    contentMargin: number; // margin around the floating content card
+    contentRadius: number; // content card corner radius
+    contentOverflow: "visible" | "hidden"; // clip card children to the radius
+    chromeDivider: number; // chrome divider border width — sidebars + workspace header (0 hides them)
+    controlBorder: number; // resting outline width for inputs / dropdown triggers (0 = borderless in the new theme)
+    floating: boolean; // true in the new theme — lets stylesheets branch the floating look
+  };
 }
 
 const commonTheme: CommonTheme = {
@@ -527,6 +561,15 @@ const commonTheme: CommonTheme = {
   borderRadius: BORDER_RADIUS,
   borderWidth: BORDER_WIDTH,
   opacity: OPACITY,
+  // Classic shell: flush full-bleed content, 1px sidebar dividers.
+  shell: {
+    contentMargin: SPACING[0],
+    contentRadius: BORDER_RADIUS.none,
+    contentOverflow: "visible",
+    chromeDivider: BORDER_WIDTH[1],
+    controlBorder: BORDER_WIDTH[1],
+    floating: false,
+  },
 };
 
 const darkShadow = {
@@ -569,35 +612,87 @@ export const darkMidnightTheme = buildDarkTheme(midnightDarkColors);
 export const darkClaudeTheme = buildDarkTheme(claudeDarkColors);
 export const darkGhosttyTheme = buildDarkTheme(ghosttyDarkColors);
 
-export const lightTheme = {
-  colorScheme: "light" as const,
-  colors: {
-    ...lightSemanticColors,
-    palette: baseColors,
-    syntax: lightHighlightColors,
+const lightShadow = {
+  sm: {
+    shadowColor: "rgba(0, 0, 0, 0.02)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
   },
-  shadow: {
-    sm: {
-      shadowColor: "rgba(0, 0, 0, 0.02)",
-      shadowOffset: { width: 0, height: 2 },
-      shadowRadius: 8,
-      elevation: 2,
-    },
-    md: {
-      shadowColor: "rgba(0, 0, 0, 0.04)",
-      shadowOffset: { width: 0, height: 4 },
-      shadowRadius: 16,
-      elevation: 4,
-    },
-    lg: {
-      shadowColor: "rgba(0, 0, 0, 0.08)",
-      shadowOffset: { width: 0, height: 8 },
-      shadowRadius: 24,
-      elevation: 8,
-    },
+  md: {
+    shadowColor: "rgba(0, 0, 0, 0.04)",
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 16,
+    elevation: 4,
   },
-  ...commonTheme,
+  lg: {
+    shadowColor: "rgba(0, 0, 0, 0.08)",
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 8,
+  },
 } as const;
+
+// Widened string shape shared by all light variants so they register as a
+// single Unistyles theme type, matching how the dark variants behave.
+type LightSemanticColors = {
+  [K in keyof typeof lightSemanticColors]: (typeof lightSemanticColors)[K] extends string
+    ? string
+    : { [K2 in keyof (typeof lightSemanticColors)[K]]: string };
+};
+
+function buildLightTheme(semanticColors: LightSemanticColors) {
+  return {
+    colorScheme: "light" as const,
+    colors: {
+      ...semanticColors,
+      palette: baseColors,
+      syntax: lightHighlightColors,
+    },
+    shadow: lightShadow,
+    ...commonTheme,
+  } as const;
+}
+
+export const lightTheme = buildLightTheme(lightSemanticColors);
+
+// Independent "new theme" — registered as its own Unistyles key (not a dropdown
+// ThemeName); applied when `settings.newThemeEnabled` is on, overriding whatever
+// the theme dropdown selected. Floats the content (tabs + panes) as an inset
+// rounded card on the #fafafa shell underlay, and drops the sidebar dividers.
+const newThemeShell = {
+  contentMargin: SPACING[2], // 8 — gap around the floating card
+  contentRadius: BORDER_RADIUS.xl, // 12
+  contentOverflow: "hidden", // clip tab row + panes to the rounded corners
+  chromeDivider: BORDER_WIDTH[0], // 0 — no sidebar / header divider lines
+  controlBorder: BORDER_WIDTH[0], // 0 — borderless inputs / dropdown triggers
+  floating: true,
+} as const;
+
+export const newTheme = { ...buildLightTheme(newThemeSemanticColors), shell: newThemeShell };
+
+// Authoritative Unistyles-theme-key → colorScheme map, derived from the theme
+// objects' own `colorScheme` so it can't drift. Use this anywhere only the theme
+// NAME is available — notably a `StyleSheet.create((theme, rt) => …)` factory on
+// web, where every string leaf on `theme` (including `theme.colorScheme`) is
+// rewritten to a `var(--…)` reference and is unusable as a value (see
+// docs/unistyles.md). A name-prefix heuristic is NOT enough: the fork's
+// `newTheme` is a light theme whose key starts with neither "light" nor "dark".
+const THEME_NAME_TO_COLOR_SCHEME = {
+  light: lightTheme.colorScheme,
+  newTheme: newTheme.colorScheme,
+  dark: darkTheme.colorScheme,
+  darkZinc: darkZincTheme.colorScheme,
+  darkMidnight: darkMidnightTheme.colorScheme,
+  darkClaude: darkClaudeTheme.colorScheme,
+  darkGhostty: darkGhosttyTheme.colorScheme,
+} satisfies Record<string, "light" | "dark">;
+
+// Falls back to "dark" for unknown names (the app's dark-default, and the only
+// names seen before settings load are `light`/`dark`, both mapped above).
+export function colorSchemeForThemeName(themeName: string): "light" | "dark" {
+  return THEME_NAME_TO_COLOR_SCHEME[themeName as keyof typeof THEME_NAME_TO_COLOR_SCHEME] ?? "dark";
+}
 
 // Keep compatibility with existing code
 export const theme = darkTheme;

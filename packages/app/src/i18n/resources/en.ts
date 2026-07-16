@@ -146,6 +146,7 @@ export const en = {
       extraHigh: "Extra high",
       select: "Select thinking option",
       selectWithValue: "Select thinking option ({{value}})",
+      levels: { low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" },
     },
     model: {
       unknown: "Unknown model",
@@ -155,16 +156,53 @@ export const en = {
       open: "Open agent features",
       on: "On",
       off: "Off",
+      known: {
+        fast_mode: {
+          label: "Fast",
+          description: "Lower latency responses at higher token cost",
+          tooltip: "Toggle fast mode",
+        },
+        plan_mode: {
+          label: "Plan",
+          description: "Switch Codex into planning-only collaboration mode",
+          tooltip: "Toggle plan mode",
+        },
+        ultracode: {
+          label: "Ultracode",
+          description: "Use extra-high effort with Claude's dynamic workflow orchestration",
+          tooltip: "Toggle Ultracode",
+        },
+      },
     },
     mode: {
       title: "Mode",
       searchPlaceholder: "Search modes...",
       selectWithValue: "Select agent mode ({{value}})",
+      known: {
+        alwaysAsk: "Always ask",
+        autoMode: "Auto mode",
+        autoReview: "Auto-review",
+        defaultPermissions: "Default permissions",
+        fullAccess: "Full access",
+        acceptFileEdits: "Accept file edits",
+        planMode: "Plan mode",
+        bypass: "Bypass permissions",
+        readOnly: "Read only",
+        dontAsk: "Don't ask",
+      },
     },
     hints: {
       thinking: "Thinking mode",
       model: "Change model",
       mode: "Change mode",
+      gateway: "Model gateway",
+    },
+    gateway: {
+      nativeLabel: "Native",
+      fallbackLabel: "Model gateway",
+      sheetTitle: "Model Gateway",
+      selectAccessibilityLabel: "Select model gateway",
+      selectAccessibilityLabelWithValue: "Select model gateway ({{value}})",
     },
   },
   agentStream: {
@@ -299,6 +337,11 @@ export const en = {
       manual: "Context manually compacted",
       withTokens: "Context compacted ({{tokens}}K tokens)",
       completed: "Context compacted",
+    },
+    footer: {
+      workedFor: "Worked for {{duration}}",
+      durationEndedAt: "{{duration}}, ended {{timestamp}}",
+      tokenRate: "{{rate}} tok/s",
     },
   },
   importSession: {
@@ -831,6 +874,14 @@ export const en = {
     sections: {
       sessions: "History",
       schedules: "Schedules",
+    },
+    sessionsList: {
+      newConversation: "New chat",
+      newAgentInWorkspace: "New agent in this workspace",
+      history: "History",
+      empty: "No sessions yet",
+      unknownWorkspace: "Other",
+      renameWorkspace: "Rename workspace",
     },
     worktreeSetup: {
       title: "Set up worktree scripts",
@@ -1741,6 +1792,12 @@ export const en = {
       },
     },
     appearance: {
+      newTheme: {
+        title: "New theme",
+        label: "Use new theme",
+        hint: "Apply the redesigned light look across the app, independent of the theme below",
+        accessibilityLabel: "Use new theme",
+      },
       theme: {
         title: "Theme",
         accessibilityLabel: "Theme: {{value}}",

@@ -1312,7 +1312,7 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0,
   },
   divider: {
-    height: 1,
+    height: theme.shell.chromeDivider,
     backgroundColor: theme.colors.border,
   },
   toolbar: {
@@ -1320,7 +1320,7 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottomWidth: 1,
+    borderBottomWidth: theme.shell.chromeDivider,
     borderBottomColor: theme.colors.border,
     paddingTop: theme.spacing[2],
     paddingRight: theme.spacing[3],
@@ -1467,11 +1467,12 @@ const styles = StyleSheet.create((theme) => ({
   card: {
     marginHorizontal: theme.spacing[3],
     marginBottom: theme.spacing[3],
-    borderWidth: 1,
+    borderWidth: theme.shell.chromeDivider,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surfaceSidebar,
+    borderRadius: theme.shell.floating ? theme.shell.contentRadius : theme.borderRadius.lg,
+    backgroundColor: theme.shell.floating ? theme.colors.surface0 : theme.colors.surfaceSidebar,
     overflow: "hidden",
+    ...(theme.shell.floating ? theme.shadow.sm : null),
   },
   entryHeaderPressable: {
     flexDirection: "row",
@@ -1550,9 +1551,9 @@ const styles = StyleSheet.create((theme) => ({
   nestedThread: {
     marginHorizontal: theme.spacing[3],
     marginBottom: theme.spacing[2],
-    borderWidth: 1,
+    borderWidth: theme.shell.chromeDivider,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.shell.floating ? theme.shell.contentRadius : theme.borderRadius.md,
     overflow: "hidden",
   },
   threadHeader: {
@@ -1576,7 +1577,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: 3,
   },
   threadComment: {
-    borderTopWidth: 1,
+    borderTopWidth: theme.shell.chromeDivider,
     borderTopColor: theme.colors.border,
     paddingBottom: theme.spacing[2],
   },
@@ -1598,12 +1599,13 @@ const styles = StyleSheet.create((theme) => ({
     marginTop: theme.spacing[2],
   },
   replyCard: {
-    borderWidth: 1,
+    borderWidth: theme.shell.chromeDivider,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.surface1,
+    borderRadius: theme.shell.floating ? theme.shell.contentRadius : theme.borderRadius.md,
+    backgroundColor: theme.shell.floating ? theme.colors.surface0 : theme.colors.surface1,
     marginBottom: theme.spacing[2],
     overflow: "hidden",
+    ...(theme.shell.floating ? theme.shadow.sm : null),
   },
   replyThreadComment: {
     borderTopWidth: 0,
