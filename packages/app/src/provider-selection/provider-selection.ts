@@ -37,6 +37,23 @@ export interface ProviderSelectionReadiness {
   reason?: string;
 }
 
+// i18n keys can't contain "." / "[" cleanly (dots nest). Map model ids to safe keys.
+export function modelDescriptionI18nKey(modelId: string): string {
+  return `modelDescriptions.${modelId.replace(/[^a-zA-Z0-9-]/g, "_")}`;
+}
+
+function localizeModelDescription(modelId: string, fallback?: string | null): string | undefined {
+  const fallbackText = fallback?.trim() || modelId;
+  const lang = (i18n.resolvedLanguage ?? i18n.language ?? "en").toLowerCase();
+  // Provider-native descriptions stay as-is for English UIs. Chinese (and future
+  // hand-maintained locales) overlay our catalog when a key exists.
+  if (!lang.startsWith("zh")) {
+    return fallbackText;
+  }
+  const translated = i18n.t(modelDescriptionI18nKey(modelId), { defaultValue: "" });
+  return translated || fallbackText;
+}
+
 function buildModelRows(
   provider: string,
   providerLabel: string,
@@ -48,7 +65,7 @@ function buildModelRows(
     providerLabel,
     modelId: model.id,
     modelLabel: model.label,
-    description: model.description ?? model.id,
+    description: localizeModelDescription(model.id, model.description),
     isDefault: model.isDefault,
   }));
 }
