@@ -48,7 +48,10 @@ class FakeGrokSession implements AgentSession {
   private deferredCanceledTurnId: string | null = null;
   private turnSequence = 0;
 
-  constructor(readonly id: string) {}
+  constructor(
+    readonly id: string,
+    private readonly replayEvents: AgentStreamEvent[] = [],
+  ) {}
 
   async run(): Promise<AgentRunResult> {
     throw new Error("the Grok wrapper owns run()");
@@ -79,6 +82,9 @@ class FakeGrokSession implements AgentSession {
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {
     this.subscribers.add(callback);
     callback({ type: "thread_started", provider: "grok", sessionId: this.id });
+    for (const event of this.replayEvents) {
+      callback(event);
+    }
     return () => this.subscribers.delete(callback);
   }
 
@@ -245,6 +251,29 @@ function wrap(params: {
 }
 
 describe("Grok automatic account recovery", () => {
+  test("replays context usage captured before outer subscribers attach", () => {
+    const usageEvent: AgentStreamEvent = {
+      type: "usage_updated",
+      provider: "grok",
+      usage: {
+        contextWindowUsedTokens: 49_179,
+        contextWindowMaxTokens: 500_000,
+      },
+    };
+    const source = new FakeGrokSession("session-1", [usageEvent]);
+    const { session } = wrap({
+      source,
+      controller: new FakeAccountController("account-a"),
+      boundAccountId: "account-a",
+      resumed: [],
+    });
+    const events: AgentStreamEvent[] = [];
+
+    session.subscribe((event) => events.push(event));
+
+    expect(events).toContainEqual(usageEvent);
+  });
+
   test("reloads the same native session before the first prompt after a manual account switch", async () => {
     const source = new FakeGrokSession("session-1");
     const resumed = new FakeGrokSession("session-1");

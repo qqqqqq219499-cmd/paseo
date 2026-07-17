@@ -79,6 +79,7 @@ class GrokAutoFailoverSession {
   private readonly logger: Logger;
   private readonly interruptForceSettleTimeoutMs: number;
   private boundAccountId: string | null;
+  private latestUsage: Extract<AgentStreamEvent, { type: "usage_updated" }>["usage"] | null = null;
   private activeTurn: ActiveTurn | null = null;
   private transition: Promise<void> | null = null;
   private closed = false;
@@ -180,6 +181,9 @@ class GrokAutoFailoverSession {
     this.subscribers.add(callback);
     if (this.session.id) {
       callback({ type: "thread_started", provider: "grok", sessionId: this.session.id });
+    }
+    if (this.latestUsage) {
+      callback({ type: "usage_updated", provider: "grok", usage: this.latestUsage });
     }
     return () => {
       this.subscribers.delete(callback);
@@ -342,6 +346,9 @@ class GrokAutoFailoverSession {
   }
 
   private handleSessionEvent(event: AgentStreamEvent): void {
+    if (event.type === "usage_updated") {
+      this.latestUsage = event.usage;
+    }
     const eventTurnId = getAgentStreamEventTurnId(event);
     const turn = this.activeTurn;
     if (!turn) {

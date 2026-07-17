@@ -29,6 +29,7 @@ import {
   resolveACPModelSelection,
   summarizeACPRequestError,
 } from "./acp-agent.js";
+import type { ACPContextUsageResolver } from "./acp-context-usage.js";
 import type { ProcessTerminator, TreeKillTarget } from "../../../utils/tree-kill.js";
 import {
   COPILOT_AGENT_FEATURE_OPTION,
@@ -105,6 +106,26 @@ interface ACPModelSelectionInternals {
   configOptions: SessionConfigOption[];
 }
 
+interface ACPThinkingInternals {
+  sessionId: string | null;
+  connection: {
+    unstable_setSessionModel: (input: {
+      sessionId: string;
+      modelId: string;
+      _meta?: { reasoningEffort: string };
+    }) => Promise<unknown>;
+  };
+  availableModels: Array<{
+    modelId: string;
+    name: string;
+    _meta?: Record<string, unknown>;
+  }> | null;
+  currentModel: string | null;
+  thinkingOptionId: string | null;
+  configOptions: SessionConfigOption[];
+  applySessionState(response: SessionStateResponse): void;
+}
+
 interface ACPConfiguredOverrideInternals {
   sessionId: string | null;
   connection: {
@@ -176,6 +197,7 @@ class FakeTerminator {
 function createSessionWithConfig(
   config: { provider?: string; modeId?: string | null; model?: string | null } = {},
   logger: ReturnType<typeof createTestLogger> = createTestLogger(),
+  contextUsageResolver?: ACPContextUsageResolver,
 ): ACPAgentSession {
   return new ACPAgentSession(
     {
@@ -197,6 +219,7 @@ function createSessionWithConfig(
         supportsReasoningStream: true,
         supportsToolInvocations: true,
       },
+      contextUsageResolver,
     },
   );
 }
@@ -692,6 +715,241 @@ describe("mapACPUsage", () => {
       inputTokens: 11,
       outputTokens: 7,
       cachedInputTokens: 5,
+    });
+  });
+});
+
+describe("ACP context usage", () => {
+  test("emits usage_updated from standard ACP usage_update", async () => {
+    const session = createSessionWithConfig();
+    asInternals<ACPSessionInternals>(session).sessionId = "session-1";
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    await session.sessionUpdate({
+      sessionId: "session-1",
+      update: {
+        sessionUpdate: "usage_update",
+        used: 42_000,
+        size: 200_000,
+        cost: { amount: 0.12, currency: "USD" },
+      },
+    });
+
+    expect(events.at(-1)).toMatchObject({
+      type: "usage_updated",
+      usage: {
+        contextWindowUsedTokens: 42_000,
+        contextWindowMaxTokens: 200_000,
+        totalCostUsd: 0.12,
+      },
+    });
+  });
+
+  test("uses the provider resolver for notification metadata", async () => {
+    const contextUsageResolver: ACPContextUsageResolver = {
+      resolveNotificationUsage: (notification) => {
+        const totalTokens = (notification._meta as { totalTokens?: unknown } | undefined)
+          ?.totalTokens;
+        return typeof totalTokens === "number"
+          ? {
+              contextWindowUsedTokens: totalTokens,
+              contextWindowMaxTokens: 500_000,
+            }
+          : undefined;
+      },
+    };
+    const session = createSessionWithConfig(
+      { provider: "grok" },
+      createTestLogger(),
+      contextUsageResolver,
+    );
+    asInternals<ACPSessionInternals>(session).sessionId = "session-1";
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    await session.sessionUpdate({
+      sessionId: "session-1",
+      update: {
+        sessionUpdate: "agent_thought_chunk",
+        content: { type: "text", text: "thinking" },
+      },
+      _meta: { totalTokens: 61_695 },
+    });
+
+    expect(events.findLast((event) => event.type === "usage_updated")).toMatchObject({
+      type: "usage_updated",
+      usage: {
+        contextWindowUsedTokens: 61_695,
+        contextWindowMaxTokens: 500_000,
+      },
+    });
+  });
+
+  test("keeps live context occupancy on turn completion", async () => {
+    const session = createSessionWithConfig();
+    const events: AgentStreamEvent[] = [];
+    let resolvePrompt!: (value: PromptResponse) => void;
+    asInternals<ACPSessionInternals>(session).sessionId = "session-1";
+    asInternals<ACPSessionInternals>(session).connection = {
+      prompt: () => new Promise((resolve) => (resolvePrompt = resolve)),
+    };
+    session.subscribe((event) => events.push(event));
+
+    const { turnId } = await session.startTurn("hello");
+    await session.sessionUpdate({
+      sessionId: "session-1",
+      update: {
+        sessionUpdate: "usage_update",
+        used: 42_000,
+        size: 200_000,
+      },
+    });
+    resolvePrompt({
+      stopReason: "end_turn",
+      usage: { inputTokens: 11, outputTokens: 7, totalTokens: 18 },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(
+      events.find((event) => event.type === "turn_completed" && event.turnId === turnId),
+    ).toMatchObject({
+      type: "turn_completed",
+      usage: {
+        inputTokens: 11,
+        outputTokens: 7,
+        contextWindowUsedTokens: 42_000,
+        contextWindowMaxTokens: 200_000,
+      },
+    });
+  });
+
+  test("keeps usage undefined when no source reported usage", async () => {
+    const session = createSessionWithConfig();
+    const events: AgentStreamEvent[] = [];
+    let resolvePrompt!: (value: PromptResponse) => void;
+    asInternals<ACPSessionInternals>(session).sessionId = "session-1";
+    asInternals<ACPSessionInternals>(session).connection = {
+      prompt: () => new Promise((resolve) => (resolvePrompt = resolve)),
+    };
+    session.subscribe((event) => events.push(event));
+
+    const { turnId } = await session.startTurn("hello");
+    resolvePrompt({ stopReason: "end_turn" });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const completed = events.find(
+      (event) => event.type === "turn_completed" && event.turnId === turnId,
+    );
+    expect(completed).toMatchObject({ type: "turn_completed", turnId });
+    expect(completed?.type === "turn_completed" ? completed.usage : null).toBeUndefined();
+  });
+});
+
+describe("ACP model reasoning metadata", () => {
+  test("initializes the current thinking option from the selected model", async () => {
+    const session = createSessionWithConfig({ provider: "grok", model: "grok-4.5" });
+    const internals = asInternals<ACPThinkingInternals>(session);
+
+    internals.applySessionState({
+      sessionId: "session-1",
+      models: {
+        currentModelId: "grok-4.5",
+        availableModels: [
+          {
+            modelId: "grok-4.5",
+            name: "Grok 4.5",
+            _meta: {
+              reasoningEffort: "high",
+              reasoningEfforts: [{ id: "high", label: "High", default: true }],
+            },
+          },
+        ],
+      },
+    });
+
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({ thinkingOptionId: "high" });
+  });
+
+  test("writes a selected effort through session/set_model metadata", async () => {
+    const session = createSessionWithConfig({ provider: "grok", model: "grok-4.5" });
+    const internals = asInternals<ACPThinkingInternals>(session);
+    const unstableSetSessionModel = vi.fn(async () => ({}));
+    internals.sessionId = "session-1";
+    internals.currentModel = "grok-4.5";
+    internals.thinkingOptionId = "high";
+    internals.availableModels = [
+      {
+        modelId: "grok-4.5",
+        name: "Grok 4.5",
+        _meta: {
+          reasoningEffort: "high",
+          reasoningEfforts: [
+            { id: "high", label: "High", default: true },
+            { id: "low", label: "Low", default: false },
+          ],
+        },
+      },
+    ];
+    internals.configOptions = [];
+    internals.connection = { unstable_setSessionModel: unstableSetSessionModel };
+
+    await session.setThinkingOption("low");
+
+    expect(unstableSetSessionModel).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      modelId: "grok-4.5",
+      _meta: { reasoningEffort: "low" },
+    });
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({ thinkingOptionId: "low" });
+  });
+
+  test("preserves the selected effort when switching reasoning-capable models", async () => {
+    const session = createSessionWithConfig({ provider: "grok", model: "grok-4.5" });
+    const internals = asInternals<ACPThinkingInternals>(session);
+    const unstableSetSessionModel = vi.fn(async () => ({}));
+    internals.sessionId = "session-1";
+    internals.currentModel = "grok-4.5";
+    internals.thinkingOptionId = "high";
+    internals.availableModels = [
+      {
+        modelId: "grok-4.5",
+        name: "Grok 4.5",
+        _meta: {
+          reasoningEffort: "high",
+          reasoningEfforts: [
+            { id: "high", label: "High", default: true },
+            { id: "low", label: "Low", default: false },
+          ],
+        },
+      },
+      {
+        modelId: "grok-4",
+        name: "Grok 4",
+        _meta: {
+          reasoningEffort: "low",
+          reasoningEfforts: [
+            { id: "high", label: "High", default: false },
+            { id: "low", label: "Low", default: true },
+          ],
+        },
+      },
+    ];
+    internals.configOptions = [];
+    internals.connection = { unstable_setSessionModel: unstableSetSessionModel };
+
+    await session.setModel("grok-4");
+
+    expect(unstableSetSessionModel).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      modelId: "grok-4",
+      _meta: { reasoningEffort: "high" },
+    });
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "grok-4",
+      thinkingOptionId: "high",
     });
   });
 });

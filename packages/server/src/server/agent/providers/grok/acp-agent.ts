@@ -11,6 +11,7 @@ import { GenericACPAgentClient } from "../generic-acp-agent.js";
 import { createGrokAutoFailoverSession } from "./auto-failover.js";
 import { enrichGrokSessionModes, GROK_MODES, normalizeGrokModeId } from "./modes.js";
 import { enrichGrokSessionReasoningEfforts } from "./reasoning-efforts.js";
+import { createGrokContextUsageResolver } from "./session-context.js";
 
 function enrichGrokSessionResponse(
   response: Parameters<typeof enrichGrokSessionReasoningEfforts>[0],
@@ -55,6 +56,7 @@ export class GrokACPAgentClient extends GenericACPAgentClient {
       defaultModes: GROK_MODES,
       modeIdTransformer: normalizeGrokModeId,
       sessionResponseTransformer: enrichGrokSessionResponse,
+      contextUsageResolver: createGrokContextUsageResolver(),
     });
     this.accountController = options.accountController;
   }

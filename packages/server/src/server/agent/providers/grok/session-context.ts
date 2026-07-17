@@ -1,9 +1,11 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { SessionNotification } from "@agentclientprotocol/sdk";
 
 import { resolveGrokHome } from "../../../../services/grok/grok-auth-file.js";
 import type { AgentUsage } from "../../agent-sdk-types.js";
+import type { ACPContextUsageResolver } from "../acp-context-usage.js";
 
 /** Default Grok Build context window (matches CLI chrome + signals.contextWindowTokens). */
 export const GROK_DEFAULT_CONTEXT_WINDOW_TOKENS = 500_000;
@@ -34,6 +36,34 @@ export function findGrokSessionDir(grokHome: string, sessionId: string): string 
 export interface GrokSignalsContext {
   contextTokensUsed: number;
   contextWindowTokens: number;
+}
+
+interface GrokContextNotification {
+  _meta?: unknown;
+  update: unknown;
+}
+
+export function resolveGrokContextUsageFromNotification(
+  notification: GrokContextNotification,
+  currentUsage?: AgentUsage,
+): AgentUsage | undefined {
+  const update = notification.update as { _meta?: unknown } | null;
+  const candidates = [notification._meta, update?._meta];
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== "object") {
+      continue;
+    }
+    const totalTokens = (candidate as Record<string, unknown>).totalTokens;
+    if (typeof totalTokens !== "number" || !Number.isFinite(totalTokens) || totalTokens < 0) {
+      continue;
+    }
+    return {
+      contextWindowUsedTokens: totalTokens,
+      contextWindowMaxTokens:
+        currentUsage?.contextWindowMaxTokens ?? GROK_DEFAULT_CONTEXT_WINDOW_TOKENS,
+    };
+  }
+  return undefined;
 }
 
 /**
@@ -96,5 +126,19 @@ export function resolveGrokContextUsageFromDisk(input: {
   return {
     contextWindowUsedTokens: signals.contextTokensUsed,
     contextWindowMaxTokens: signals.contextWindowTokens,
+  };
+}
+
+export function createGrokContextUsageResolver(
+  options: {
+    grokHome?: string;
+    env?: NodeJS.ProcessEnv;
+    homedirFn?: () => string;
+  } = {},
+): ACPContextUsageResolver {
+  return {
+    resolveInitialUsage: (sessionId) => resolveGrokContextUsageFromDisk({ sessionId, ...options }),
+    resolveNotificationUsage: (notification: SessionNotification, currentUsage) =>
+      resolveGrokContextUsageFromNotification(notification, currentUsage),
   };
 }

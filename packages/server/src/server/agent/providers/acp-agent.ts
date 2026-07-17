@@ -113,6 +113,16 @@ import {
   truncateForDiagnostic,
 } from "./diagnostic-utils.js";
 import { withTimeout } from "../../../utils/promise-timeout.js";
+import {
+  type ACPContextUsageResolver,
+  mapACPUsageUpdate,
+  mergeACPContextUsage,
+} from "./acp-context-usage.js";
+import {
+  deriveCurrentThinkingOptionFromModels,
+  deriveThinkingOptionsFromModelMeta,
+  resolveThinkingOptionAfterModelChange,
+} from "./acp-model-thinking.js";
 
 function assertChildWithPipes(
   child: ChildProcess,
@@ -393,6 +403,7 @@ interface ACPAgentClientOptions {
   extensionCommandsParser?: ACPExtensionCommandsParser;
   waitForInitialCommands?: boolean;
   initialCommandsWaitTimeoutMs?: number;
+  contextUsageResolver?: ACPContextUsageResolver;
   terminateProcess?: ProcessTerminator;
 }
 
@@ -426,6 +437,7 @@ interface ACPAgentSessionOptions {
   launchEnv?: Record<string, string>;
   waitForInitialCommands?: boolean;
   initialCommandsWaitTimeoutMs?: number;
+  contextUsageResolver?: ACPContextUsageResolver;
   terminateProcess?: ProcessTerminator;
 }
 
@@ -650,15 +662,26 @@ export function deriveModelDefinitionsFromACP(
   const defaultThinkingOptionId = thinkingOptions.find((option) => option.isDefault)?.id ?? null;
 
   if (models?.availableModels?.length) {
-    return models.availableModels.map((model) => ({
-      provider,
-      id: model.modelId,
-      label: model.name,
-      description: model.description ?? undefined,
-      isDefault: model.modelId === models.currentModelId,
-      thinkingOptions: thinkingOptions.length > 0 ? thinkingOptions : undefined,
-      defaultThinkingOptionId: defaultThinkingOptionId ?? undefined,
-    }));
+    return models.availableModels.map((model) => {
+      const fromMeta = deriveThinkingOptionsFromModelMeta(model);
+      const modelThinkingOptions =
+        thinkingOptions.length > 0 ? thinkingOptions : fromMeta.thinkingOptions;
+      const modelDefaultThinkingOptionId =
+        thinkingOptions.length > 0
+          ? defaultThinkingOptionId
+          : (fromMeta.thinkingOptions.find((option) => option.isDefault)?.id ??
+            fromMeta.currentThinkingOptionId);
+
+      return {
+        provider,
+        id: model.modelId,
+        label: model.name,
+        description: model.description ?? undefined,
+        isDefault: model.modelId === models.currentModelId,
+        thinkingOptions: modelThinkingOptions.length > 0 ? modelThinkingOptions : undefined,
+        defaultThinkingOptionId: modelDefaultThinkingOptionId ?? undefined,
+      };
+    });
   }
 
   const modelOptions = deriveSelectorOptions(configOptions, "model");
@@ -733,6 +756,7 @@ export class ACPAgentClient implements AgentClient {
   private readonly waitForInitialCommands: boolean;
   private readonly initialCommandsWaitTimeoutMs: number;
   private readonly extensionCommandsParser?: ACPExtensionCommandsParser;
+  private readonly contextUsageResolver?: ACPContextUsageResolver;
   protected readonly terminateProcess: ProcessTerminator;
 
   constructor(options: ACPAgentClientOptions) {
@@ -760,6 +784,7 @@ export class ACPAgentClient implements AgentClient {
     this.waitForInitialCommands = options.waitForInitialCommands ?? false;
     this.initialCommandsWaitTimeoutMs = options.initialCommandsWaitTimeoutMs ?? 1500;
     this.extensionCommandsParser = options.extensionCommandsParser;
+    this.contextUsageResolver = options.contextUsageResolver;
   }
 
   async createSession(
@@ -792,6 +817,7 @@ export class ACPAgentClient implements AgentClient {
         extensionCommandsParser: this.extensionCommandsParser,
         waitForInitialCommands: this.waitForInitialCommands,
         initialCommandsWaitTimeoutMs: this.initialCommandsWaitTimeoutMs,
+        contextUsageResolver: this.contextUsageResolver,
       },
     );
     await session.initializeNewSession();
@@ -843,6 +869,7 @@ export class ACPAgentClient implements AgentClient {
       extensionCommandsParser: this.extensionCommandsParser,
       waitForInitialCommands: this.waitForInitialCommands,
       initialCommandsWaitTimeoutMs: this.initialCommandsWaitTimeoutMs,
+      contextUsageResolver: this.contextUsageResolver,
     });
     await session.initializeResumedSession();
     return session;
@@ -1329,7 +1356,9 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   private waitForInitialCommands: boolean;
   private initialCommandsWaitTimeoutMs: number;
   private readonly extensionCommandsParser?: ACPExtensionCommandsParser;
+  private readonly contextUsageResolver?: ACPContextUsageResolver;
   private currentTurnUsage: AgentUsage | undefined;
+  private latestContextUsage: AgentUsage | undefined;
   private activeForegroundTurnId: string | null = null;
   private autonomousTurnId: string | null = null;
   private autonomousTurnTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1372,6 +1401,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     this.waitForInitialCommands = options.waitForInitialCommands ?? false;
     this.initialCommandsWaitTimeoutMs = options.initialCommandsWaitTimeoutMs ?? 1500;
     this.extensionCommandsParser = options.extensionCommandsParser;
+    this.contextUsageResolver = options.contextUsageResolver;
   }
 
   get id(): string | null {
@@ -1393,6 +1423,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     this.sessionId = response.sessionId;
     this.bootstrapThreadEventPending = true;
     this.applySessionState(response);
+    this.applyInitialContextUsage();
     await this.applyConfiguredOverrides();
   }
 
@@ -1429,6 +1460,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       this.replayingHistory = false;
       this.historyPending = this.persistedHistory.length > 0;
       this.applySessionState(response);
+      this.applyInitialContextUsage();
     } else if (sessionCapabilities?.resume) {
       const response = await this.runACPRequest(() =>
         this.connection!.unstable_resumeSession({
@@ -1438,6 +1470,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
         }),
       );
       this.applySessionState(response);
+      this.applyInitialContextUsage();
     } else {
       throw new Error(`${this.provider} does not support ACP session resume`);
     }
@@ -1480,6 +1513,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     const turnId = randomUUID();
     const messageId = options?.messageId ?? randomUUID();
     this.activeForegroundTurnId = turnId;
+    this.currentTurnUsage = this.latestContextUsage ? { ...this.latestContextUsage } : undefined;
     this.fallbackAssistantMessageId = null;
     this.activeSubmittedUserMessage = null;
     this.emitBootstrapThreadEvent();
@@ -1518,6 +1552,13 @@ export class ACPAgentSession implements AgentSession, ACPClient {
         type: "thread_started",
         provider: this.provider,
         sessionId: this.sessionId,
+      });
+    }
+    if (this.latestContextUsage) {
+      callback({
+        type: "usage_updated",
+        provider: this.provider,
+        usage: this.latestContextUsage,
       });
     }
     return () => {
@@ -1788,11 +1829,24 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       }
 
       try {
+        const targetFromMeta = deriveThinkingOptionsFromModelMeta(selection.availableModel);
+        const nextThinkingOptionId = resolveThinkingOptionAfterModelChange({
+          requestedThinkingOptionId: this.thinkingOptionId,
+          targetFromMeta,
+        });
+        const passEffort =
+          Boolean(nextThinkingOptionId) &&
+          targetFromMeta.thinkingOptions.some((option) => option.id === nextThinkingOptionId);
+
         await this.connection.unstable_setSessionModel({
           sessionId: this.sessionId,
           modelId,
+          ...(passEffort ? { _meta: { reasoningEffort: nextThinkingOptionId } } : {}),
         });
         this.currentModel = modelId;
+        if (targetFromMeta.thinkingOptions.length > 0) {
+          this.thinkingOptionId = nextThinkingOptionId;
+        }
         this.pushEvent({
           type: "model_changed",
           provider: this.provider,
@@ -1864,7 +1918,8 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       category: "thought_level",
     });
     if (!option) {
-      throw new Error(`${this.provider} does not expose ACP thought-level selection`);
+      await this.setReasoningEffortViaModelMeta(thinkingOptionId);
+      return;
     }
     const response = await this.connection.setSessionConfigOption({
       sessionId: this.sessionId,
@@ -1878,6 +1933,52 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       requestedValue: thinkingOptionId,
       label: "thought-level",
     });
+    this.pushEvent({
+      type: "thinking_option_changed",
+      provider: this.provider,
+      thinkingOptionId: this.thinkingOptionId,
+    });
+  }
+
+  private async setReasoningEffortViaModelMeta(thinkingOptionId: string): Promise<void> {
+    if (!this.connection || !this.sessionId || !this.currentModel) {
+      throw new Error(`${this.provider} does not expose ACP thought-level selection`);
+    }
+    if (typeof this.connection.unstable_setSessionModel !== "function") {
+      throw new Error(`${this.provider} does not expose ACP thought-level selection`);
+    }
+
+    const currentModel = this.availableModels?.find((model) => model.modelId === this.currentModel);
+    const fromMeta = deriveThinkingOptionsFromModelMeta(currentModel);
+    if (!fromMeta.thinkingOptions.some((option) => option.id === thinkingOptionId)) {
+      this.warnInvalidSelection(
+        thinkingOptionId,
+        `is not a valid ${this.provider} reasoning-effort option. Available options: ${fromMeta.thinkingOptions
+          .map((option) => option.id)
+          .join(", ")}`,
+      );
+      return;
+    }
+
+    await this.connection.unstable_setSessionModel({
+      sessionId: this.sessionId,
+      modelId: this.currentModel,
+      _meta: { reasoningEffort: thinkingOptionId },
+    });
+    if (this.availableModels) {
+      this.availableModels = this.availableModels.map((model) =>
+        model.modelId === this.currentModel
+          ? {
+              ...model,
+              _meta: {
+                ...(model._meta && typeof model._meta === "object" ? model._meta : {}),
+                reasoningEffort: thinkingOptionId,
+              },
+            }
+          : model,
+      );
+    }
+    this.thinkingOptionId = thinkingOptionId;
     this.pushEvent({
       type: "thinking_option_changed",
       provider: this.provider,
@@ -2112,6 +2213,10 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     if (params.sessionId !== this.sessionId) {
       return;
     }
+
+    this.applyContextUsage(
+      this.contextUsageResolver?.resolveNotificationUsage?.(params, this.latestContextUsage),
+    );
 
     const events = this.translateSessionUpdate(params.update);
     this.logger.trace(
@@ -2385,7 +2490,9 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     this.currentModel =
       transformed.models?.currentModelId ?? deriveCurrentConfigValue(this.configOptions, "model");
     this.thinkingOptionId =
-      deriveCurrentConfigValue(this.configOptions, "thought_level") ?? this.thinkingOptionId;
+      deriveCurrentConfigValue(this.configOptions, "thought_level") ??
+      deriveCurrentThinkingOptionFromModels(transformed.models, this.currentModel) ??
+      this.thinkingOptionId;
   }
 
   private transformConfigOptions(configOptions: SessionConfigOption[]): SessionConfigOption[] {
@@ -2636,11 +2743,24 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   }
 
   private handleUsageUpdate(update: UsageUpdate): void {
-    void update;
+    this.applyContextUsage(mapACPUsageUpdate(update));
   }
 
   private handlePromptResponse(response: PromptResponse, turnId: string): void {
-    this.currentTurnUsage = mapACPUsage(response.usage) ?? this.currentTurnUsage;
+    const promptUsage = mapACPUsage(response.usage);
+    if (this.latestContextUsage || this.currentTurnUsage || promptUsage) {
+      this.currentTurnUsage = {
+        ...this.latestContextUsage,
+        ...this.currentTurnUsage,
+        ...promptUsage,
+        contextWindowMaxTokens:
+          this.latestContextUsage?.contextWindowMaxTokens ??
+          this.currentTurnUsage?.contextWindowMaxTokens,
+        contextWindowUsedTokens:
+          this.latestContextUsage?.contextWindowUsedTokens ??
+          this.currentTurnUsage?.contextWindowUsedTokens,
+      };
+    }
 
     switch (response.stopReason) {
       case "cancelled":
@@ -2743,6 +2863,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       return;
     }
     this.autonomousTurnId = randomUUID();
+    this.currentTurnUsage = this.latestContextUsage ? { ...this.latestContextUsage } : undefined;
     this.pushEvent({
       type: "turn_started",
       provider: this.provider,
@@ -2760,7 +2881,37 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     }
     const turnId = this.autonomousTurnId;
     this.autonomousTurnId = null;
-    this.pushEvent({ type: "turn_completed", provider: this.provider, turnId });
+    this.pushEvent({
+      type: "turn_completed",
+      provider: this.provider,
+      usage: this.currentTurnUsage,
+      turnId,
+    });
+  }
+
+  private applyInitialContextUsage(): void {
+    if (!this.sessionId) {
+      return;
+    }
+    this.applyContextUsage(this.contextUsageResolver?.resolveInitialUsage?.(this.sessionId));
+  }
+
+  private applyContextUsage(usage: AgentUsage | undefined): void {
+    const next = mergeACPContextUsage(this.latestContextUsage, usage);
+    if (!next) {
+      return;
+    }
+    this.latestContextUsage = next;
+    this.currentTurnUsage = {
+      ...this.currentTurnUsage,
+      ...next,
+    };
+    this.pushEvent({
+      type: "usage_updated",
+      provider: this.provider,
+      usage: next,
+      turnId: this.activeForegroundTurnId ?? this.autonomousTurnId ?? undefined,
+    });
   }
 
   private resetAutonomousTurnTimer(): void {

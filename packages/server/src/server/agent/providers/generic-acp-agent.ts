@@ -12,6 +12,7 @@ import {
   type ACPExtensionCommandsParser,
   type SessionStateResponse,
 } from "./acp-agent.js";
+import type { ACPContextUsageResolver } from "./acp-context-usage.js";
 import {
   buildBinaryDiagnosticRows,
   formatProviderDiagnostic,
@@ -56,6 +57,7 @@ interface GenericACPAgentClientOptions {
   sessionResponseTransformer?: (response: SessionStateResponse) => SessionStateResponse;
   defaultModes?: AgentMode[];
   modeIdTransformer?: (modeId: string) => string | null;
+  contextUsageResolver?: ACPContextUsageResolver;
 }
 
 export class GenericACPAgentClient extends ACPAgentClient {
@@ -83,6 +85,7 @@ export class GenericACPAgentClient extends ACPAgentClient {
       sessionResponseTransformer: options.sessionResponseTransformer,
       defaultModes: options.defaultModes,
       modeIdTransformer: options.modeIdTransformer,
+      contextUsageResolver: options.contextUsageResolver,
     });
 
     this.command = options.command;
