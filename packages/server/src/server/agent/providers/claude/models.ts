@@ -6,6 +6,7 @@ import type { Logger } from "pino";
 import type { AgentModelDefinition } from "../../agent-sdk-types.js";
 import {
   getClaudeManifestModels,
+  normalizeClaudeManifestModelId,
   normalizeClaudeRuntimeModelId as normalizeClaudeManifestRuntimeModelId,
 } from "./model-manifest.js";
 
@@ -46,6 +47,15 @@ export async function getClaudeModelsWithSettings(
 
   for (const model of settingsModels) {
     if (seenModelIds.has(model.id)) {
+      continue;
+    }
+    // First-party model strings (e.g. "claude-fable-5[1m]" or a dated ID) are
+    // aliases of catalog entries; surfacing them as separate settings models
+    // would duplicate the catalog entry without thinking options or context
+    // window metadata. Provider-prefixed IDs (Bedrock, OpenRouter, gateways)
+    // normalize to null here and stay as-is.
+    const manifestModelId = normalizeClaudeManifestModelId(model.id);
+    if (manifestModelId && seenModelIds.has(manifestModelId)) {
       continue;
     }
     seenModelIds.add(model.id);

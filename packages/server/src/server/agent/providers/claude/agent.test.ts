@@ -413,6 +413,7 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
       });
 
       expect(models.map((m) => m.id)).toEqual([
+        "claude-fable-5[1m]",
         "claude-fable-5",
         "claude-opus-4-8[1m]",
         "claude-opus-4-8",
@@ -456,6 +457,7 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
       };
 
       expect(getThinkingIds("claude-fable-5")).toContain("ultracode");
+      expect(getThinkingIds("claude-fable-5[1m]")).toContain("ultracode");
       expect(getThinkingIds("claude-opus-4-8[1m]")).toContain("ultracode");
       expect(getThinkingIds("claude-opus-4-8")).toContain("ultracode");
       expect(getThinkingIds("claude-sonnet-5")).toContain("xhigh");

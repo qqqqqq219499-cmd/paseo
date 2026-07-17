@@ -40,6 +40,7 @@ describe("getClaudeModels", () => {
   it("returns all claude models", () => {
     const models = getClaudeModels();
     expect(models.map((m) => m.id)).toEqual([
+      "claude-fable-5[1m]",
       "claude-fable-5",
       "claude-opus-4-8[1m]",
       "claude-opus-4-8",
@@ -68,6 +69,7 @@ describe("getClaudeModels", () => {
 
     expect(contextWindows).toEqual(
       new Map([
+        ["claude-fable-5[1m]", 1_000_000],
         ["claude-fable-5", 1_000_000],
         ["claude-opus-4-8[1m]", 1_000_000],
         ["claude-opus-4-8", 200_000],
@@ -223,6 +225,25 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
       env: {
         ANTHROPIC_MODEL: "",
         ANTHROPIC_DEFAULT_OPUS_MODEL: 42,
+      },
+    });
+    vi.stubEnv("CLAUDE_CONFIG_DIR", configDir);
+    const client = new ClaudeAgentClient({ logger: createTestLogger() });
+
+    const { models } = await client.fetchCatalog({
+      scope: "workspace",
+      cwd: os.tmpdir(),
+      force: true,
+    });
+
+    expect(models).toEqual(getClaudeModels());
+  });
+
+  it("folds first-party settings model aliases into their catalog entries", async () => {
+    const configDir = await createClaudeConfigDir({
+      model: "claude-fable-5[1m]",
+      env: {
+        ANTHROPIC_MODEL: "claude-opus-4-8-20260101",
       },
     });
     vi.stubEnv("CLAUDE_CONFIG_DIR", configDir);
