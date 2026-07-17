@@ -3,6 +3,8 @@ import type {
   PullRequestTimelineResponse,
 } from "@getpaseo/protocol/messages";
 
+import { i18n } from "@/i18n/i18next";
+
 export type PrState = "open" | "draft" | "merged" | "closed";
 export type CheckStatus = "success" | "failure" | "pending" | "skipped";
 export type ReviewState = "approved" | "changes_requested" | "commented";
@@ -126,29 +128,29 @@ export function formatAge(createdAtMs: number, nowMs = Date.now()): string {
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
 
   if (elapsedSeconds < 60) {
-    return "just now";
+    return i18n.t("time.justNow");
   }
 
   const elapsedMinutes = Math.floor(elapsedSeconds / 60);
   if (elapsedMinutes < 60) {
-    return `${elapsedMinutes}m ago`;
+    return i18n.t("time.minutesAgo", { count: elapsedMinutes });
   }
 
   const elapsedHours = Math.floor(elapsedMinutes / 60);
   if (elapsedHours < 24) {
-    return `${elapsedHours}h ago`;
+    return i18n.t("time.hoursAgo", { count: elapsedHours });
   }
 
   const elapsedDays = Math.floor(elapsedHours / 24);
   if (elapsedDays < 30) {
-    return `${elapsedDays}d ago`;
+    return i18n.t("time.daysAgo", { count: elapsedDays });
   }
 
   if (elapsedDays < 365) {
-    return `${Math.floor(elapsedDays / 30)}mo ago`;
+    return i18n.t("time.monthsAgo", { count: Math.floor(elapsedDays / 30) });
   }
 
-  return `${Math.floor(elapsedDays / 365)}y ago`;
+  return i18n.t("time.yearsAgo", { count: Math.floor(elapsedDays / 365) });
 }
 
 function derivePrState(status: NonNullable<CheckoutPrStatus>): PrState {

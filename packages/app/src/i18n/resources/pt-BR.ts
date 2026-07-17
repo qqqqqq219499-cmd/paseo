@@ -1,6 +1,15 @@
 import type { TranslationResources } from "./en";
 
 export const ptBR: TranslationResources = {
+  time: {
+    justNow: "just now",
+    secondsAgo: "{{count}}s ago",
+    minutesAgo: "{{count}}m ago",
+    hoursAgo: "{{count}}h ago",
+    daysAgo: "{{count}}d ago",
+    monthsAgo: "{{count}}mo ago",
+    yearsAgo: "{{count}}y ago",
+  },
   common: {
     back: "Voltar",
     loading: "Carregando...",
@@ -148,7 +157,14 @@ export const ptBR: TranslationResources = {
       extraHigh: "Extra high",
       select: "Select thinking option",
       selectWithValue: "Select thinking option ({{value}})",
-      levels: { low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" },
+      levels: {
+        low: "Low",
+        medium: "Medium",
+        high: "High",
+        xhigh: "Extra high",
+        max: "Max",
+        ultracode: "Ultra Code",
+      },
     },
     model: {
       unknown: "Unknown model",
@@ -1560,7 +1576,7 @@ export const ptBR: TranslationResources = {
     "claude-sonnet-4-6_1m_": "Sonnet 4.6 with 1M context window",
     "claude-sonnet-4-6": "Sonnet 4.6 · Best for everyday tasks",
     "claude-haiku-4-5": "Haiku 4.5 · Fastest for quick answers",
-    "claude-fable-5_1m_": "From Claude settings.json model",
+    "claude-fable-5_1m_": "Fable 5 with 1M context window",
     "grok-4_5": "SpaceXAI's new frontier model",
     "grok-composer-2_5-fast": "Cursor's latest coding model",
   },

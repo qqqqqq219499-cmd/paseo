@@ -17,7 +17,7 @@ import { getBindingIdForAction, getDefaultKeysForAction } from "@/keyboard/keybo
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import { getIsElectronRuntime } from "@/constants/layout";
-import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { navigateToAgentDirectoryEntry } from "@/utils/navigate-to-agent-directory-entry";
 import { focusWithRetries } from "@/utils/web-focus";
 import { isWeb } from "@/constants/platform";
 import { useProjects } from "@/hooks/use-projects";
@@ -298,10 +298,9 @@ export function useCommandCenter() {
       // Don't restore focus back to the prior element after we navigate.
       clearCommandCenterFocusRestoreElement();
       setOpen(false);
-      navigateToAgent({
-        serverId: agent.serverId,
-        agentId: agent.id,
-      });
+      // Same path as History: archive/history-only agents need seed + pin so
+      // tab reconciliation does not immediately drop the opened tab.
+      navigateToAgentDirectoryEntry(agent);
     },
     [setOpen],
   );

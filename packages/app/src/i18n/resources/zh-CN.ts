@@ -1,6 +1,15 @@
 import type { TranslationResources } from "./en";
 
 export const zhCN: TranslationResources = {
+  time: {
+    justNow: "刚刚",
+    secondsAgo: "{{count}} 秒前",
+    minutesAgo: "{{count}} 分钟前",
+    hoursAgo: "{{count}} 小时前",
+    daysAgo: "{{count}} 天前",
+    monthsAgo: "{{count}} 个月前",
+    yearsAgo: "{{count}} 年前",
+  },
   common: {
     back: "返回",
     loading: "加载中...",
@@ -148,7 +157,14 @@ export const zhCN: TranslationResources = {
       extraHigh: "超高",
       select: "选择思考强度",
       selectWithValue: "选择思考强度（{{value}}）",
-      levels: { low: "低", medium: "中", high: "高", xhigh: "超高", max: "最高" },
+      levels: {
+        low: "低",
+        medium: "中",
+        high: "高",
+        xhigh: "超高",
+        max: "最高",
+        ultracode: "Ultracode",
+      },
     },
     model: {
       unknown: "未知模型",
@@ -1519,7 +1535,7 @@ export const zhCN: TranslationResources = {
     "claude-sonnet-4-6_1m_": "Sonnet 4.6，100 万上下文窗口",
     "claude-sonnet-4-6": "Sonnet 4.6 · 日常任务首选",
     "claude-haiku-4-5": "Haiku 4.5 · 快速应答最快",
-    "claude-fable-5_1m_": "来自 Claude settings.json 的模型",
+    "claude-fable-5_1m_": "Fable 5，100 万上下文窗口",
     "grok-4_5": "SpaceXAI 新一代前沿模型",
     "grok-composer-2_5-fast": "Cursor 最新编程模型",
   },
@@ -2101,7 +2117,7 @@ export const zhCN: TranslationResources = {
         noSearchMatches: "没有匹配搜索的 Model",
         noneDetected: "未检测到 Model",
         discovered: "已发现",
-        custom: "自定义 Models",
+        custom: "自定义模型",
         updated: "已更新 {{time}}",
       },
       diagnostic: {

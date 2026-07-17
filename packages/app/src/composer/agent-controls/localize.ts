@@ -103,6 +103,10 @@ export function localizeThinkingOptionLabel(
   t: TFunction,
   option: { id: string; label?: string | null },
 ): string {
+  const compactId = option.id.replace(/[\s_-]+/g, "").toLowerCase();
+  if (compactId === "ultracode") {
+    return t("agentControls.thinking.levels.ultracode");
+  }
   const level = asThinkingLevelId(option.id) ?? asThinkingLevelId(option.label ?? "");
   if (level) {
     return t(`agentControls.thinking.levels.${level}`);

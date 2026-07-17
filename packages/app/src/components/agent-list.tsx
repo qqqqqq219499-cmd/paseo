@@ -19,7 +19,7 @@ import { type AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { useSessionStore } from "@/stores/session-store";
 import { Archive, ChevronRight } from "lucide-react-native";
 import { getProviderIcon } from "@/components/provider-icons";
-import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { navigateToAgentDirectoryEntry } from "@/utils/navigate-to-agent-directory-entry";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 
 interface AgentListProps {
@@ -386,15 +386,11 @@ export function AgentList({
         return;
       }
 
-      const serverId = agent.serverId;
-      const agentId = agent.id;
-
       onAgentSelect?.();
-      navigateToAgent({
-        serverId,
-        agentId,
-        workspaceId: agent.workspaceId,
-      });
+      // History / multi-host rows include archived sessions that are not in the
+      // live agents map. Route through the directory entry opener so the tab is
+      // seeded + pinned and not pruned by workspace tab reconciliation.
+      navigateToAgentDirectoryEntry(agent);
     },
     [isActionSheetVisible, onAgentSelect],
   );
