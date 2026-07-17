@@ -293,6 +293,12 @@ export const PersistedConfigSchema = z
       .strict()
       .optional(),
 
+    // COMPAT(forkModelGateways): added 2026-07-17. Opaque passthrough for the
+    // model-gateway block written by the reclaude fork build. Parsed as unknown
+    // and written back untouched on save so switching between fork and official
+    // builds never drops it. Official code must never read this field.
+    modelGateways: z.unknown().optional(),
+
     providers: ProvidersSchema.optional(),
     worktrees: WorktreesConfigSchema.optional(),
     agents: z

@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
@@ -696,6 +696,30 @@ describe("loadPersistedConfig", () => {
       expect((config.providers?.openai as Record<string, unknown>)?.voice).toBeUndefined();
       expect(config.providers?.openai?.stt).toBeUndefined();
       expect(config.providers?.openai?.tts).toBeUndefined();
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("preserves the fork's modelGateways block through load and save", () => {
+    const home = createTempHome();
+    const configPath = path.join(home, "config.json");
+    try {
+      const gateways = {
+        default: "sub2api",
+        gateways: [{ name: "sub2api", baseUrl: "https://gw.example.com/v1" }],
+      };
+      writeFileSync(
+        configPath,
+        `${JSON.stringify({ version: 1, modelGateways: gateways }, null, 2)}\n`,
+      );
+
+      const config = loadPersistedConfig(home);
+      expect(config.modelGateways).toEqual(gateways);
+
+      savePersistedConfig(home, config);
+      const roundTripped = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
+      expect(roundTripped.modelGateways).toEqual(gateways);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
