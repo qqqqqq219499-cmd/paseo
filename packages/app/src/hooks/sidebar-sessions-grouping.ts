@@ -1,6 +1,6 @@
 import type { SidebarSessionEntry } from "@/hooks/use-sidebar-sessions-list";
 import { deriveProjectDisplayName } from "@/utils/agent-grouping";
-import { parseGitHubRepoFromRemote } from "@/git/github-url";
+import { forgeFromRemoteUrl } from "@/git/forge";
 
 export type SidebarProjectNameOverrides = ReadonlyMap<string, string>;
 export type SidebarSessionGroupIconKind = "folder" | "git-folder" | "github";
@@ -76,7 +76,7 @@ function resolveIconKind(
   const checkout = session.projectPlacement?.checkout;
   if (
     projectKey?.startsWith("remote:github.com/") ||
-    parseGitHubRepoFromRemote(checkout?.remoteUrl)
+    forgeFromRemoteUrl(checkout?.remoteUrl) === "github"
   ) {
     return "github";
   }

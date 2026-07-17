@@ -1360,9 +1360,6 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   private currentTurnUsage: AgentUsage | undefined;
   private latestContextUsage: AgentUsage | undefined;
   private activeForegroundTurnId: string | null = null;
-  private autonomousTurnId: string | null = null;
-  private autonomousTurnTimer: ReturnType<typeof setTimeout> | null = null;
-  private static readonly AUTONOMOUS_TURN_TIMEOUT_MS = 30_000;
   private fallbackAssistantMessageId: string | null = null;
   private closed = false;
   private historyPending = false;
@@ -1508,7 +1505,6 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     if (this.activeForegroundTurnId) {
       throw new Error("A foreground turn is already active");
     }
-    this.completeAutonomousTurn();
 
     const turnId = randomUUID();
     const messageId = options?.messageId ?? randomUUID();
@@ -2224,7 +2220,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
         agentId: this.agentId,
         provider: this.provider,
         sessionId: this.sessionId,
-        turnId: this.activeForegroundTurnId ?? this.autonomousTurnId ?? undefined,
+        turnId: this.activeForegroundTurnId ?? undefined,
         rawEvent: params,
         events,
       },
@@ -2237,11 +2233,6 @@ export class ACPAgentSession implements AgentSession, ACPClient {
         }
       }
       return;
-    }
-
-    if (events.length > 0 && !this.activeForegroundTurnId) {
-      this.startAutonomousTurn();
-      this.resetAutonomousTurnTimer();
     }
 
     for (const event of events) {
@@ -2792,25 +2783,23 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       type: "timeline",
       provider: this.provider,
       item,
-      turnId: this.activeForegroundTurnId ?? this.autonomousTurnId ?? undefined,
+      turnId: this.activeForegroundTurnId ?? undefined,
     };
   }
 
   private pushEvent(event: AgentStreamEvent): void {
-    const turnId = this.activeForegroundTurnId ?? this.autonomousTurnId;
-    const tagged = event.type === "timeline" && turnId ? { ...event, turnId } : event;
     this.logger.trace(
       {
         agentId: this.agentId,
         provider: this.provider,
         sessionId: this.sessionId,
-        turnId: getAgentStreamEventTurnId(tagged) ?? turnId ?? undefined,
-        event: tagged,
+        turnId: getAgentStreamEventTurnId(event) ?? this.activeForegroundTurnId ?? undefined,
+        event,
       },
       "provider.acp.event_emit",
     );
     for (const subscriber of this.subscribers) {
-      subscriber(tagged);
+      subscriber(event);
     }
   }
 
@@ -2858,37 +2847,6 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     this.pushEvent(event);
   }
 
-  private startAutonomousTurn(): void {
-    if (this.autonomousTurnId) {
-      return;
-    }
-    this.autonomousTurnId = randomUUID();
-    this.currentTurnUsage = this.latestContextUsage ? { ...this.latestContextUsage } : undefined;
-    this.pushEvent({
-      type: "turn_started",
-      provider: this.provider,
-      turnId: this.autonomousTurnId,
-    });
-  }
-
-  private completeAutonomousTurn(): void {
-    if (!this.autonomousTurnId) {
-      return;
-    }
-    if (this.autonomousTurnTimer) {
-      clearTimeout(this.autonomousTurnTimer);
-      this.autonomousTurnTimer = null;
-    }
-    const turnId = this.autonomousTurnId;
-    this.autonomousTurnId = null;
-    this.pushEvent({
-      type: "turn_completed",
-      provider: this.provider,
-      usage: this.currentTurnUsage,
-      turnId,
-    });
-  }
-
   private applyInitialContextUsage(): void {
     if (!this.sessionId) {
       return;
@@ -2910,20 +2868,9 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       type: "usage_updated",
       provider: this.provider,
       usage: next,
-      turnId: this.activeForegroundTurnId ?? this.autonomousTurnId ?? undefined,
+      turnId: this.activeForegroundTurnId ?? undefined,
     });
   }
-
-  private resetAutonomousTurnTimer(): void {
-    if (this.autonomousTurnTimer) {
-      clearTimeout(this.autonomousTurnTimer);
-    }
-    this.autonomousTurnTimer = setTimeout(() => {
-      this.completeAutonomousTurn();
-    }, ACPAgentSession.AUTONOMOUS_TURN_TIMEOUT_MS);
-    this.autonomousTurnTimer.unref?.();
-  }
-
   private isSubmittedUserMessageEcho(
     item: Extract<AgentTimelineItem, { type: "user_message" }>,
   ): boolean {
