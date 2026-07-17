@@ -114,6 +114,22 @@
 
 ---
 
+### 4. Grok 思考档位 + 上下文环
+
+| 能力            | 模块化落点                                         | 状态                                                   |
+| --------------- | -------------------------------------------------- | ------------------------------------------------------ |
+| 思考档位        | `server/agent/providers/grok/reasoning-efforts.ts` | 已搬；按模型能力补齐 `xhigh/high/medium/low`           |
+| Grok 上下文解析 | `server/agent/providers/grok/session-context.ts`   | 已接线；读通知级 `_meta.totalTokens` 与 `signals.json` |
+| ACP 通用用量    | `server/agent/providers/acp-context-usage.ts`      | 新建独立模块；处理标准 `usage_update`、校验和去重      |
+| ACP 思考元数据  | `server/agent/providers/acp-model-thinking.ts`     | 新建独立模块；解析档位并在模型切换时保留/回落          |
+| 切号事件重放    | `server/agent/providers/grok/auto-failover.ts`     | 缓存初始用量，避免包装器提前订阅后吞掉上下文环事件     |
+| 适配器组装      | `server/agent/providers/grok/acp-agent.ts`         | 只负责挂 Grok thinking/context adapter                 |
+
+边界要求：Grok 的 500K 默认窗口、磁盘目录和 `_meta` 结构不得写进通用
+`acp-agent.ts`；通用层只保留 `ACPContextUsageResolver` 接口和事件生命周期。
+
+---
+
 ## 明确没整文件覆盖的原因
 
 - official 与 fork **版本差大**（例如 unistyles breakpoints、无 `lightClaude`、工作区/侧栏组件 API 不同）。
@@ -136,7 +152,7 @@
 ```
 源：E:\paseo          （sakurayun/paseo-reclaude 二开）
 宿：E:\paseo-official （getpaseo 官方系 + 本机 feature 分支）
-已搬：新主题 + 会话侧栏 + 拖窗 + 模型/设置汉化（见上表）
+已搬：新主题 + 会话侧栏 + 拖窗 + 模型/设置汉化 + Grok 思考/上下文（见上表）
 未搬：fork 独有 source-control-pane；其它与官方重叠且未列入合并策略的改动
 ```
 
