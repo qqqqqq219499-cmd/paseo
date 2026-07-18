@@ -13,6 +13,7 @@ import { asInternals, createStub } from "./test-utils/class-mocks.js";
 import { createProviderSnapshotManagerStub } from "./test-utils/session-stubs.js";
 import type { PushNotificationSender, PushPayload } from "./push/notifications.js";
 import type { WorkspaceAutoName } from "./workspace-auto-name.js";
+import type { GrokAccountsState } from "./messages.js";
 
 const wsModuleMock = vi.hoisted(() => {
   class MockWebSocketServer {
@@ -45,6 +46,7 @@ import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
 
 interface WebSocketServerInternals {
   sessions: Map<unknown, unknown>;
+  broadcastGrokChanged(payload: GrokAccountsState): void;
   broadcastAgentAttention(params: {
     agentId: string;
     reason: string;
@@ -173,6 +175,8 @@ function createSessionWithActivity(
 ) {
   return {
     getClientActivity: vi.fn(() => activity),
+    supports: () => false,
+    supportsForSource: () => false,
   };
 }
 
@@ -188,6 +192,7 @@ function connectClient(
 ) {
   const ws = createOpenSocket();
   asInternals<WebSocketServerInternals>(server).sessions.set(ws, {
+    kind: "trusted",
     session: createSessionWithActivity(activity),
     clientId: "client-test",
     appVersion: null,
@@ -322,5 +327,43 @@ describe("VoiceAssistantWebSocketServer notification payloads", () => {
 
     expect(readAttentionRequiredMessage(ws).shouldNotify).toBe(false);
     expect(pushNotifications.sent).toEqual([]);
+  });
+
+  it("keeps Grok account state off Hub sockets", () => {
+    const { server } = createServer();
+    const trustedWs = connectClient(server, null);
+    const hubWs = createOpenSocket();
+    asInternals<WebSocketServerInternals>(server).sessions.set(hubWs, {
+      kind: "hub",
+      session: {},
+      daemonId: "hub-daemon-test",
+      connectionLogger: createLogger(),
+      socket: hubWs,
+    });
+    const state: GrokAccountsState = {
+      accounts: [
+        {
+          id: "account-test",
+          email: "private@example.com",
+          addedAt: "2026-07-18T00:00:00.000Z",
+          needsReauth: true,
+        },
+      ],
+      activeAccountId: "account-test",
+      unsavedActive: null,
+      login: { state: "idle", loginId: null, error: null },
+    };
+
+    asInternals<WebSocketServerInternals>(server).broadcastGrokChanged(state);
+
+    expect(trustedWs.send).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(trustedWs.send.mock.calls[0]![0])).toMatchObject({
+      type: "session",
+      message: {
+        type: "provider.grok.changed",
+        payload: { accounts: [{ email: "private@example.com" }] },
+      },
+    });
+    expect(hubWs.send).not.toHaveBeenCalled();
   });
 });

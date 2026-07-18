@@ -93,3 +93,240 @@
 - `docs/windows-mcpproxy-startup.md` - recorded the root cause, task policy, verification contract, and residual risk.
 - `progress.md` - appended this task record and evidence.
 - Rollback point: `23f5a0e243` (HEAD before this task). Run the scoped stop helper, then `Disable-ScheduledTask -TaskName "MCPProxy Gateway"` and `Unregister-ScheduledTask -TaskName "MCPProxy Gateway" -Confirm:$false`; restore the external launcher with `Copy-Item C:\Users\Administrator\mcpproxy-trial\mcpproxy-gateway.vbs.pre-fix-20260718 C:\Users\Administrator\mcpproxy-trial\mcpproxy-gateway.vbs -Force`. Restore repository files with `git restore -- CLAUDE.md progress.md` and remove the new document with `Remove-Item -LiteralPath docs/windows-mcpproxy-startup.md`.
+
+## 2026-07-18 - Task: Merge official Paseo 0.2.0-beta.1 update
+
+### What was done
+
+- Merged `origin/main` through `a1de743ef` into `feature/grok-accounts-zh-i18n`, adopting the official `0.2.0-beta.1` baseline.
+- Resolved the sidebar and server bootstrap/session/WebSocket conflicts while preserving the local Chinese/new-theme and Grok account capabilities alongside the official resize, workspace provisioning, and Hub features.
+- Fixed the combined Grok/Hub permission regression so Grok account metadata is broadcast only to trusted clients, never Hub execution sockets.
+
+### Testing
+
+- Runtime/dependencies: verified `Node v22.20.0` and `npm 10.9.3`; `npm ci` completed with 2,576 packages installed and the repository patches applied.
+- Conflict checks: all conflict markers were removed and `git diff --check` exited 0.
+- Targeted merge tests: bootstrap tests passed `2/2`; the isolated provider-availability test passed `1/1`; Hub execution WebSocket tests passed `8/8`.
+- Protocol/client/Grok tests: `npx vitest run packages/protocol/src/messages.hub.test.ts packages/client/src/daemon-client.test.ts packages/server/src/services/grok/grok-account-service.test.ts packages/server/src/services/grok/grok-account-store.test.ts --bail=1` passed 217 tests in 4 files with 1 pre-existing conditional skip.
+- Grok/Hub isolation RED: `npx vitest run packages/server/src/server/websocket-server.notifications.test.ts --bail=1` failed because the Hub socket received one `provider.grok.changed` frame containing account metadata.
+- Grok/Hub isolation GREEN: the same command passed all 6 tests after routing the push through the trusted-only broadcaster.
+- Builds: `npm run build:client` and `npm run build:server` both exited 0 under Node 22.20.0.
+- Typecheck: a fresh post-fix `npm run typecheck` passed all 10 workspaces.
+- Lint: full `npm run lint` reported 0 warnings and 0 errors across 2,828 files; the final Grok/Hub fix also passed targeted lint with 0 warnings and 0 errors.
+- Format: `npm run format:check` reported all 3,031 matched files correctly formatted after restoring the staged index's canonical LF bytes; the index tree hash remained unchanged and no unstaged diff was introduced.
+
+### Notes
+
+- `.agents/skills/release-beta/SKILL.md` - merged official upstream changes.
+- `.agents/skills/release-stable/SKILL.md` - merged official upstream changes.
+- `.github/workflows/ci.yml` - merged official upstream changes.
+- `CHANGELOG.md` - merged the official 0.2.0-beta.1 release notes.
+- `docs/android.md` - merged official upstream documentation updates.
+- `docs/architecture.md` - merged official upstream documentation updates.
+- `docs/data-model.md` - merged official upstream documentation updates.
+- `docs/glossary.md` - merged official upstream documentation updates.
+- `docs/hub.md` - added from the official upstream update.
+- `docs/release.md` - merged official upstream documentation updates.
+- `docs/testing.md` - merged official upstream documentation updates.
+- `nix/npm-deps.hash` - merged official upstream changes.
+- `package-lock.json` - adopted the official 0.2.0-beta.1 dependency lock.
+- `package.json` - adopted the official 0.2.0-beta.1 workspace version and scripts.
+- `packages/app/e2e/directory-bootstrap.spec.ts` - added from the official upstream update.
+- `packages/app/e2e/empty-project-persists.spec.ts` - merged official upstream test updates.
+- `packages/app/e2e/global-setup.ts` - merged official upstream changes.
+- `packages/app/e2e/helpers/daemon-client-loader.ts` - merged official upstream changes.
+- `packages/app/e2e/helpers/daemon-restart.ts` - removed as part of the official upstream update.
+- `packages/app/e2e/helpers/daemon-websocket-gate.ts` - added from the official upstream update.
+- `packages/app/e2e/helpers/directory-bootstrap-scenario.ts` - added from the official upstream update.
+- `packages/app/e2e/helpers/isolated-host-daemon.ts` - merged official upstream changes.
+- `packages/app/e2e/helpers/new-workspace.ts` - merged official upstream changes.
+- `packages/app/e2e/helpers/seed-client.ts` - merged official upstream changes.
+- `packages/app/e2e/projects-settings.spec.ts` - merged official upstream test updates.
+- `packages/app/e2e/sidebar-reorder.spec.ts` - added from the official upstream update.
+- `packages/app/e2e/sidebar-resize-handle.spec.ts` - added from the official upstream update.
+- `packages/app/e2e/sidebar-workspace.spec.ts` - merged official upstream test updates.
+- `packages/app/e2e/viewed-agent-timelines.spec.ts` - added from the official upstream update.
+- `packages/app/e2e/workspace-model-restart.spec.ts` - merged official upstream test updates.
+- `packages/app/e2e/workspace-navigation-regression.spec.ts` - merged official upstream test updates.
+- `packages/app/e2e/worktree-restore-after-restart.spec.ts` - merged official upstream test updates.
+- `packages/app/e2e/worktree-restore.spec.ts` - merged official upstream test updates.
+- `packages/app/eas.json` - merged official upstream changes.
+- `packages/app/package.json` - synchronized the official beta workspace metadata and dependencies.
+- `packages/app/src/add-project-flow/model.test.ts` - merged official upstream test updates.
+- `packages/app/src/add-project-flow/options.ts` - merged official upstream changes.
+- `packages/app/src/components/add-project-flow.tsx` - merged official upstream changes.
+- `packages/app/src/components/browser-webview-resident.ts` - merged official upstream changes.
+- `packages/app/src/components/drag-reorder/index.ts` - merged official upstream changes.
+- `packages/app/src/components/drag-reorder/pointer-activation.test.ts` - merged official upstream test updates.
+- `packages/app/src/components/drag-reorder/pointer-activation.ts` - merged official upstream changes.
+- `packages/app/src/components/draggable-list.web.tsx` - merged official upstream changes.
+- `packages/app/src/components/explorer-sidebar.tsx` - merged official upstream changes.
+- `packages/app/src/components/icons/omp-icon.tsx` - merged official upstream changes.
+- `packages/app/src/components/left-sidebar.tsx` - resolved the new-theme/Chinese sidebar conflict while adopting the official resize handle.
+- `packages/app/src/components/rewind/use-rewind-agent-mutation.ts` - merged official upstream changes.
+- `packages/app/src/components/sidebar-resize-handle.tsx` - added from the official upstream update.
+- `packages/app/src/components/sidebar-workspace-list.tsx` - merged official upstream changes.
+- `packages/app/src/components/sidebar/use-long-press-drag-interaction.ts` - merged official upstream changes.
+- `packages/app/src/components/tool-call-details.tsx` - merged official upstream changes.
+- `packages/app/src/contexts/session-context.tsx` - merged official upstream changes.
+- `packages/app/src/contexts/session-resume-revalidation.test.ts` - added from the official upstream update.
+- `packages/app/src/contexts/session-resume-revalidation.ts` - added from the official upstream update.
+- `packages/app/src/contexts/workspace-directory-reconciliation.test.ts` - added from the official upstream update.
+- `packages/app/src/contexts/workspace-directory-reconciliation.ts` - added from the official upstream update.
+- `packages/app/src/data/acp-provider-catalog.ts` - merged official upstream changes.
+- `packages/app/src/diagnostics/app-diagnostic-report.test.ts` - merged official upstream test updates.
+- `packages/app/src/e2e-metro-readiness.test.ts` - added from the official upstream update.
+- `packages/app/src/hooks/use-agent-initialization.test.ts` - merged official upstream test updates.
+- `packages/app/src/hooks/use-agent-initialization.ts` - merged official upstream changes.
+- `packages/app/src/hooks/use-load-older-agent-history.ts` - merged official upstream changes.
+- `packages/app/src/hooks/use-open-project.ts` - merged official upstream changes.
+- `packages/app/src/panels/agent-panel.tsx` - merged official upstream changes.
+- `packages/app/src/runtime/directory-sync/agent-replica.test.ts` - added from the official upstream update.
+- `packages/app/src/runtime/directory-sync/agent-replica.ts` - added from the official upstream update.
+- `packages/app/src/runtime/directory-sync/index.test.ts` - added from the official upstream update.
+- `packages/app/src/runtime/directory-sync/index.ts` - added from the official upstream update.
+- `packages/app/src/runtime/directory-sync/transaction.test.ts` - added from the official upstream update.
+- `packages/app/src/runtime/directory-sync/transaction.ts` - added from the official upstream update.
+- `packages/app/src/runtime/directory-sync/workspace-replica.test.ts` - added from the official upstream update.
+- `packages/app/src/runtime/directory-sync/workspace-replica.ts` - added from the official upstream update.
+- `packages/app/src/runtime/host-runtime.test.ts` - merged official upstream test updates.
+- `packages/app/src/runtime/host-runtime.ts` - merged official upstream changes.
+- `packages/app/src/screens/workspace/visible-agent-ids.test.ts` - added from the official upstream update.
+- `packages/app/src/screens/workspace/visible-agent-ids.ts` - added from the official upstream update.
+- `packages/app/src/screens/workspace/workspace-screen.tsx` - merged official upstream changes.
+- `packages/app/src/stores/session-store.test.ts` - merged official upstream test updates.
+- `packages/app/src/stores/session-store.ts` - merged official upstream changes.
+- `packages/app/src/timeline/fetch-agent-timeline-once.test.ts` - added from the official upstream update.
+- `packages/app/src/timeline/fetch-agent-timeline-once.ts` - added from the official upstream update.
+- `packages/app/src/timeline/session-stream-reducers.ts` - merged official upstream changes.
+- `packages/app/src/timeline/timeline-sync-plan.test.ts` - merged official upstream test updates.
+- `packages/app/src/timeline/timeline-sync-plan.ts` - merged official upstream changes.
+- `packages/app/src/timeline/viewed-timeline-sync.test.ts` - added from the official upstream update.
+- `packages/app/src/timeline/viewed-timeline-sync.ts` - added from the official upstream update.
+- `packages/app/src/utils/agent-directory-reconciliation.test.ts` - added from the official upstream update.
+- `packages/app/src/utils/agent-directory-reconciliation.ts` - added from the official upstream update.
+- `packages/app/src/utils/agent-directory-sync.test.ts` - merged official upstream test updates.
+- `packages/app/src/utils/agent-directory-sync.ts` - merged official upstream changes.
+- `packages/app/src/utils/agent-directory-update-policy.ts` - added from the official upstream update.
+- `packages/app/src/workspace/legacy-daemon-workspaces.ts` - merged official upstream changes.
+- `packages/cli/package.json` - synchronized the official beta workspace metadata and dependencies.
+- `packages/cli/src/cli.ts` - merged official upstream changes.
+- `packages/cli/src/commands/hub/index.ts` - added from the official upstream update.
+- `packages/client/package.json` - synchronized the official beta workspace metadata and dependencies.
+- `packages/client/src/daemon-client.test.ts` - merged official upstream test updates.
+- `packages/client/src/daemon-client.ts` - merged official upstream changes.
+- `packages/desktop/package.json` - synchronized the official beta workspace metadata and dependencies.
+- `packages/desktop/scripts/browser-tab-bridge.e2e.mjs` - added from the official upstream update.
+- `packages/desktop/scripts/dev-runner.mjs` - merged official upstream changes.
+- `packages/desktop/src/features/browser-automation/actionability.ts` - merged official upstream changes.
+- `packages/desktop/src/features/browser-keyboard/index.test.ts` - merged official upstream test updates.
+- `packages/desktop/src/features/browser-keyboard/index.ts` - merged official upstream changes.
+- `packages/desktop/src/features/browser-webviews/registry.test.ts` - merged official upstream test updates.
+- `packages/desktop/src/features/browser-webviews/registry.ts` - merged official upstream changes.
+- `packages/expo-two-way-audio/package.json` - synchronized the official beta workspace metadata and dependencies.
+- `packages/highlight/package.json` - synchronized the official beta workspace metadata and dependencies.
+- `packages/protocol/package.json` - synchronized the official beta workspace metadata and dependencies.
+- `packages/protocol/src/client-capabilities.ts` - merged official upstream changes.
+- `packages/protocol/src/messages.hub.test.ts` - added from the official upstream update.
+- `packages/protocol/src/messages.test.ts` - merged official upstream test updates.
+- `packages/protocol/src/messages.ts` - merged Hub protocol messages and clarified that Grok account state is broadcast only to trusted clients.
+- `packages/relay/package.json` - synchronized the official beta workspace metadata and dependencies.
+- `packages/server/package.json` - synchronized the official beta workspace metadata and dependencies.
+- `packages/server/src/server/agent/agent-loading.ts` - merged official upstream changes.
+- `packages/server/src/server/agent/agent-manager.ts` - merged official upstream changes.
+- `packages/server/src/server/agent/agent-owner.ts` - added from the official upstream update.
+- `packages/server/src/server/agent/agent-projections.ts` - merged official upstream changes.
+- `packages/server/src/server/agent/agent-storage.ts` - merged official upstream changes.
+- `packages/server/src/server/agent/create-agent-lifecycle-dispatch.test.ts` - added from the official upstream update.
+- `packages/server/src/server/agent/create-agent-lifecycle-dispatch.ts` - merged official upstream changes.
+- `packages/server/src/server/agent/create-agent/create.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/agent/create-agent/create.ts` - merged official upstream changes.
+- `packages/server/src/server/agent/mcp-server.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/agent/providers/opencode-agent.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/auto-archive-on-merge/archive-if-safe.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/auto-archive-on-merge/archive-if-safe.ts` - merged official upstream changes.
+- `packages/server/src/server/bootstrap-provider-availability.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/bootstrap.test.ts` - added from the official upstream update.
+- `packages/server/src/server/bootstrap.ts` - resolved bootstrap conflicts while retaining Grok accounts, workspace provisioning, and Hub lifecycle wiring.
+- `packages/server/src/server/daemon-client.e2e.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/daemon-e2e/empty-project-persists.e2e.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/daemon-e2e/open-project-worktree-reclassification.e2e.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/daemon-e2e/project-becomes-git.e2e.test.ts` - added from the official upstream update.
+- `packages/server/src/server/hub/daemon-executions.test.ts` - added from the official upstream update.
+- `packages/server/src/server/hub/daemon-executions.ts` - added from the official upstream update.
+- `packages/server/src/server/hub/execution-controller.test.ts` - added from the official upstream update.
+- `packages/server/src/server/hub/execution-controller.ts` - added from the official upstream update.
+- `packages/server/src/server/hub/execution-session.websocket.test.ts` - added from the official upstream update.
+- `packages/server/src/server/hub/relationship-controller.test.ts` - added from the official upstream update.
+- `packages/server/src/server/hub/relationship-controller.ts` - added from the official upstream update.
+- `packages/server/src/server/hub/relationship-remote.test.ts` - added from the official upstream update.
+- `packages/server/src/server/hub/relationship-remote.ts` - added from the official upstream update.
+- `packages/server/src/server/hub/relationship-retry.test.ts` - added from the official upstream update.
+- `packages/server/src/server/hub/relationship-retry.ts` - added from the official upstream update.
+- `packages/server/src/server/hub/test-utils/relationship-harness.ts` - added from the official upstream update.
+- `packages/server/src/server/loop-service.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/paseo-worktree-service.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/paseo-worktree-service.ts` - merged official upstream changes.
+- `packages/server/src/server/persistence-hooks.ts` - merged official upstream changes.
+- `packages/server/src/server/schedule/service.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/schedule/service.ts` - merged official upstream changes.
+- `packages/server/src/server/selective-timeline-delivery.e2e.test.ts` - added from the official upstream update.
+- `packages/server/src/server/session.create-agent-worktree-autoarchive.e2e.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/session.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/session.ts` - resolved session conflicts while retaining Grok and Hub execution/relationship dependencies.
+- `packages/server/src/server/session.workspace-git-watch.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/session.workspace-resolution-invariants.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/session.workspaces.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/session/daemon/daemon-session.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/session/daemon/daemon-session.ts` - merged official upstream changes.
+- `packages/server/src/server/session/workspace-git-observer/workspace-git-observer-service.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/session/workspace-git-observer/workspace-git-observer-service.ts` - merged official upstream changes.
+- `packages/server/src/server/session/workspace-provisioning/workspace-provisioning-service.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/session/workspace-provisioning/workspace-provisioning-service.ts` - merged official upstream changes.
+- `packages/server/src/server/session/workspace-recovery/workspace-recovery-service.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/session/workspace-recovery/workspace-recovery-service.ts` - merged official upstream changes.
+- `packages/server/src/server/session/workspace-scripts/workspace-scripts-service.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/session/workspace-scripts/workspace-scripts-service.ts` - merged official upstream changes.
+- `packages/server/src/server/snapshot-mutation-ownership.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/test-utils/fake-agent-client.ts` - merged official upstream changes.
+- `packages/server/src/server/test-utils/hub-cli-entry.ts` - added from the official upstream update.
+- `packages/server/src/server/test-utils/workspace-git-service-stub.ts` - merged official upstream changes.
+- `packages/server/src/server/websocket-server.notifications.test.ts` - merged upstream notification tests and added Hub isolation coverage for Grok account state.
+- `packages/server/src/server/websocket-server.relay-reconnect.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/websocket-server.terminal-notifications.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/websocket-server.ts` - resolved WebSocket injection conflicts and restricted Grok account broadcasts to trusted clients.
+- `packages/server/src/server/wire-compat.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/workspace-archive-service.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/workspace-archive-service.ts` - merged official upstream changes.
+- `packages/server/src/server/workspace-auto-name.ts` - merged official upstream changes.
+- `packages/server/src/server/workspace-directory.ts` - merged official upstream changes.
+- `packages/server/src/server/workspace-git-metadata.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/workspace-git-metadata.ts` - merged official upstream changes.
+- `packages/server/src/server/workspace-git-service.primitive.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/workspace-git-service.ts` - merged official upstream changes.
+- `packages/server/src/server/workspace-reconciliation-observation.test.ts` - added from the official upstream update.
+- `packages/server/src/server/workspace-reconciliation-service.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/workspace-reconciliation-service.ts` - merged official upstream changes.
+- `packages/server/src/server/workspace-registry-bootstrap-legacy.ts` - added from the official upstream update.
+- `packages/server/src/server/workspace-registry-bootstrap.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/workspace-registry-bootstrap.ts` - merged official upstream changes.
+- `packages/server/src/server/workspace-registry-model.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/workspace-registry-model.ts` - merged official upstream changes.
+- `packages/server/src/server/workspace-registry.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/workspace-registry.ts` - merged official upstream changes.
+- `packages/server/src/server/worktree-bootstrap.ts` - merged official upstream changes.
+- `packages/server/src/server/worktree-session.test.ts` - merged official upstream test updates.
+- `packages/server/src/server/worktree-session.ts` - merged official upstream changes.
+- `packages/server/src/server/worktree/commands.ts` - merged official upstream changes.
+- `packages/server/src/utils/checkout-git.test.ts` - merged official upstream test updates.
+- `packages/server/src/utils/checkout-git.ts` - merged official upstream changes.
+- `packages/server/src/utils/path.test.ts` - merged official upstream test updates.
+- `packages/server/src/utils/path.ts` - merged official upstream changes.
+- `packages/server/src/utils/worktree.test.ts` - merged official upstream test updates.
+- `packages/server/src/utils/worktree.ts` - merged official upstream changes.
+- `packages/website/package.json` - synchronized the official beta workspace metadata and dependencies.
+- `progress.md` - appended this merge record, verification evidence, file inventory, and rollback instructions.
+- `.git/config` - set repository-local `core.autocrlf=false` so future merges preserve the LF line endings required by oxfmt without changing the machine-wide Git setting.
+- `C:\Users\Administrator\windows-dev-gotchas.md` - documented the Lefthook-to-WSL PATH collision and the oxfmt/Git merge line-ending recovery procedure.
+- Dependency audit note: `npm ci` reported 72 inherited dependency advisories (7 low, 39 moderate, 20 high, 6 critical); no dependency versions were changed beyond the official lockfile in this merge.
+- Rollback point: `051044541`. After the merge commit, run `$merge = git rev-list --merges --first-parent 051044541..HEAD | Select-Object -First 1; git revert -m 1 $merge` to create a non-destructive rollback commit.
