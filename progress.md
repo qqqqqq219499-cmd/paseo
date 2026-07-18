@@ -330,3 +330,42 @@
 - `C:\Users\Administrator\windows-dev-gotchas.md` - documented the Lefthook-to-WSL PATH collision and the oxfmt/Git merge line-ending recovery procedure.
 - Dependency audit note: `npm ci` reported 72 inherited dependency advisories (7 low, 39 moderate, 20 high, 6 critical); no dependency versions were changed beyond the official lockfile in this merge.
 - Rollback point: `051044541`. After the merge commit, run `$merge = git rev-list --merges --first-parent 051044541..HEAD | Select-Object -First 1; git revert -m 1 $merge` to create a non-destructive rollback commit.
+
+## 2026-07-18 - Task: Build Paseo 0.2.0-beta.1 Windows desktop package
+
+### What was done
+
+- Built the Windows desktop artifacts from merge commit `c62855299` with the repository-required Node 22.20.0 runtime.
+- Ran the packaged x64 application through the isolated renderer, preload, daemon, CLI status, and terminal smoke workflow without touching the production Paseo or MCPProxy listeners.
+- Produced the x64 installer and zip, calculated their SHA256 hashes, and verified version metadata and Windows signature state.
+
+### Testing
+
+- Build: `npm run build:desktop -- --publish never --win --x64` exited 0 under `Node v22.20.0`; Expo exported 4,530 modules and electron-builder 26.8.1 completed the Windows targets.
+- Packaged smoke: `Packaged desktop smoke passed: real renderer and preload loaded; renderer-started desktop daemon pid 6952, listen 127.0.0.1:14737; CLI shim daemon status and terminal smoke succeeded`.
+- Runtime isolation: production Paseo port `6767` stayed on PID `4044`, MCPProxy port `8933` stayed on PID `39488`, and temporary smoke port `14737` had no listener after cleanup.
+- x64 installer: `Paseo-Setup-0.2.0-beta.1-x64.exe`, 115,666,447 bytes, SHA256 `12246BA2280D7CECC51C0F91F1C037226226F537DB7527C1DBD4B90F1A63B82F`.
+- x64 zip: `Paseo-Setup-0.2.0-beta.1-x64.zip`, 160,523,790 bytes, SHA256 `B9A8FDEEAA606C518A01A66B06D149C120F26FFD8D21C0085271A98D206A0299`.
+- Version/archive: unpacked `Paseo.exe` reported file version `0.2.0-beta.1`, product version `0.2.0.0`, and the x64 zip listed the expected Electron runtime files.
+- Signature: `Get-AuthenticodeSignature` reported `NotSigned` for the x64 installer, combined installer, and unpacked application executable.
+- Repository: the build left no tracked or untracked Git changes; generated release artifacts remain ignored by the repository.
+
+### Notes
+
+- `packages/desktop/release/Paseo-Setup-0.2.0-beta.1-x64.exe` - generated the 64-bit Windows NSIS installer.
+- `packages/desktop/release/Paseo-Setup-0.2.0-beta.1-x64.exe.blockmap` - generated update metadata for the x64 installer.
+- `packages/desktop/release/Paseo-Setup-0.2.0-beta.1-x64.zip` - generated the portable x64 archive.
+- `packages/desktop/release/Paseo-Setup-0.2.0-beta.1-arm64.exe` - generated the ARM64 NSIS installer because the committed Windows target configuration includes both architectures.
+- `packages/desktop/release/Paseo-Setup-0.2.0-beta.1-arm64.exe.blockmap` - generated update metadata for the ARM64 installer.
+- `packages/desktop/release/Paseo-Setup-0.2.0-beta.1-arm64.zip` - generated the portable ARM64 archive.
+- `packages/desktop/release/Paseo-Setup-0.2.0-beta.1.exe` - generated the combined x64/ARM64 NSIS installer.
+- `packages/desktop/release/Paseo-Setup-0.2.0-beta.1.exe.blockmap` - generated update metadata for the combined installer.
+- `packages/desktop/release/latest.yml` - refreshed electron-updater metadata for the new beta artifacts.
+- `packages/desktop/release/builder-debug.yml` - refreshed electron-builder diagnostic metadata.
+- `packages/desktop/release/win-unpacked/**` - generated the unpacked x64 application tree used by the successful smoke test.
+- `packages/desktop/release/win-arm64-unpacked/**` - generated the unpacked ARM64 application tree; smoke was correctly skipped because the host is x64.
+- `progress.md` - appended this packaging record, artifact hashes, validation evidence, risks, and rollback instructions.
+- Signing risk: the Windows artifacts are not Authenticode-signed and may trigger SmartScreen warnings on another machine.
+- Dependency collection note: electron-builder logged npm `ELSPROBLEMS` warnings for extraneous WASM packages and a missing optional CodeMirror peer, but packaging and the real packaged-app smoke both completed successfully.
+- Smoke artifact note: `PASEO_DESKTOP_SMOKE_ARTIFACT_DIR` is failure-only, so no failure directory was created after this successful run.
+- Rollback point: `c62855299`. Remove the version-specific `Paseo-Setup-0.2.0-beta.1*` files and the two generated unpacked directories under `packages/desktop/release/`; rebuild the desired prior commit to regenerate `latest.yml` and `builder-debug.yml`. Revert the packaging record commit separately with `git revert <package-record-commit>`.
