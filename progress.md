@@ -63,3 +63,33 @@
 - `docs/port-from-paseo-reclaude.md` - recorded the modular thinking resolver and failover replay landing points.
 - `progress.md` - appended this task record and verification evidence.
 - Rollback point: `08a3b96fd0` (HEAD before the full uncommitted Grok migration). Restore tracked paths with `git restore -- CLAUDE.md docs/port-from-paseo-reclaude.md packages/server/src/server/agent/providers/acp-agent.test.ts packages/server/src/server/agent/providers/acp-agent.ts packages/server/src/server/agent/providers/generic-acp-agent.ts packages/server/src/server/agent/providers/grok/acp-agent.ts packages/server/src/server/agent/providers/grok/auto-failover.test.ts packages/server/src/server/agent/providers/grok/auto-failover.ts packages/server/src/server/agent/providers/grok/session-context.test.ts packages/server/src/server/agent/providers/grok/session-context.ts` and remove the migration's new files with `Remove-Item -LiteralPath docs/grok-provider.md,progress.md,packages/server/src/server/agent/providers/acp-context-usage.ts,packages/server/src/server/agent/providers/acp-context-usage.test.ts,packages/server/src/server/agent/providers/acp-model-thinking.ts,packages/server/src/server/agent/providers/acp-model-thinking.test.ts,packages/server/src/server/agent/providers/grok/acp-agent.test.ts`.
+
+## 2026-07-18 - Task: Repair MCPProxy Windows startup
+
+### What was done
+
+- Replaced the Startup-folder retry loop with a one-shot hidden launcher that overrides `SHELL` to `COMSPEC` only for the MCPProxy process tree.
+- Registered a delayed, single-instance scheduled task with bounded restart policy and kept the old Startup entry disabled.
+- Added an exact-port/executable stop helper so stopping the task also removes its scoped MCPProxy descendant tree without broad process-name sweeps.
+- Documented startup, readiness validation, operations, rollback, and the remaining MCPProxy `CREATE_NO_WINDOW` limitation.
+
+### Testing
+
+- Isolated launch: temporary port `18934` reached `11/11` immediately; three readiness samples passed, the process tree stayed at 28 processes, visible windows stayed at 0, and all scoped test PIDs were cleaned.
+- Formal scheduled-task launch: port `8933` reached `11/11`; startup, 30-second, and 60-second samples passed; the 27-process PID set had zero churn; visible console windows and post-readiness reconnect errors both stayed at 0.
+- Single-instance: a second `Start-ScheduledTask` kept listener PID `39488` unchanged, with exactly one `mcpproxy.exe` process and `11/11` upstreams.
+- Scoped shutdown: `pwsh -NoProfile -File C:\Users\Administrator\mcpproxy-trial\mcpproxy-stop.ps1` stopped the prior listener and 27 descendants, leaving zero listeners on `8933` before the final launch.
+- Task policy: `MCPProxy Gateway` is running with `PT1M` login delay, `IgnoreNew`, three retries, and a one-minute retry interval.
+- Docs: `npm run format:check:files -- CLAUDE.md docs/windows-mcpproxy-startup.md` exited 0; `git diff --check` produced no errors.
+
+### Notes
+
+- `C:\Users\Administrator\mcpproxy-trial\mcpproxy-gateway.vbs` - replaced the unbounded loop with a process-local shell fix and one-shot gateway launch.
+- `C:\Users\Administrator\mcpproxy-trial\mcpproxy-stop.ps1` - added exact listener-path validation and scoped descendant cleanup.
+- `C:\Users\Administrator\mcpproxy-trial\STARTUP-DISABLED.txt` - replaced unsafe restore instructions with a pointer to the scheduled-task workflow.
+- `C:\Users\Administrator\mcpproxy-trial\STARTUP-OPERATIONS.txt` - added status, start, stop, disable, and rollback commands.
+- `C:\Users\Administrator\mcpproxy-trial\mcpproxy-gateway.vbs.pre-fix-20260718` - preserved the original launcher as a rollback reference only.
+- `CLAUDE.md` - indexed the Windows MCPProxy operations document.
+- `docs/windows-mcpproxy-startup.md` - recorded the root cause, task policy, verification contract, and residual risk.
+- `progress.md` - appended this task record and evidence.
+- Rollback point: `23f5a0e243` (HEAD before this task). Run the scoped stop helper, then `Disable-ScheduledTask -TaskName "MCPProxy Gateway"` and `Unregister-ScheduledTask -TaskName "MCPProxy Gateway" -Confirm:$false`; restore the external launcher with `Copy-Item C:\Users\Administrator\mcpproxy-trial\mcpproxy-gateway.vbs.pre-fix-20260718 C:\Users\Administrator\mcpproxy-trial\mcpproxy-gateway.vbs -Force`. Restore repository files with `git restore -- CLAUDE.md progress.md` and remove the new document with `Remove-Item -LiteralPath docs/windows-mcpproxy-startup.md`.
