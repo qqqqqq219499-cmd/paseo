@@ -71,6 +71,8 @@ export const ru: TranslationResources = {
       newAgent: "Новый агент",
       addProject: "Добавить проект",
       home: "Дом",
+      modelGroupLabel: "Модель",
+      modelSearchKeywords: "сменить модель изменить модель выбрать модель установить модель",
     },
   },
   composer: {
@@ -244,6 +246,7 @@ export const ru: TranslationResources = {
       notFound: "Agent не найден",
       failedToLoad: "Не удалось загрузить агент",
       reconnecting: "Повторное подключение...",
+      timelineSyncFailed: "Не удалось обновить историю агента. Повторная попытка…",
       archivingTitle: "Архивный агент...",
       archivingSubtitle: "Пожалуйста, подождите, пока мы архивируем этого агента.",
     },
@@ -1924,6 +1927,7 @@ export const ru: TranslationResources = {
     },
     shortcuts: {
       dialogTitle: "Ярлыки",
+      searchPlaceholder: "Поиск сочетаний клавиш",
       unavailableOnMobile: "Сочетания клавиш доступны только на рабочем столе.",
       capturePrompt: "Нажмите ярлык...",
       actions: {

@@ -151,7 +151,7 @@ function HostNotFound() {
   const { t } = useTranslation();
   return (
     <View>
-      <View style={EMPTY_CARD_STYLE}>
+      <View style={[settingsStyles.card, styles.emptyCard]}>
         <Text style={styles.emptyText}>{t("settings.host.notFound")}</Text>
       </View>
     </View>
@@ -277,7 +277,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
           <AppendSystemPromptCard serverId={serverId} />
         </SettingsSection>
       ) : (
-        <View style={EMPTY_CARD_STYLE}>
+        <View style={[settingsStyles.card, styles.emptyCard]}>
           <Text style={styles.emptyText}>{t("settings.host.agents.unavailable")}</Text>
         </View>
       )}
@@ -301,7 +301,7 @@ export function HostWorkspacesPage({ serverId }: { serverId: string }) {
           <AutoArchiveMergedWorkspacesCard serverId={serverId} />
         </SettingsSection>
       ) : (
-        <View style={EMPTY_CARD_STYLE}>
+        <View style={[settingsStyles.card, styles.emptyCard]}>
           <Text style={styles.emptyText}>{t("settings.host.workspaces.unavailable")}</Text>
         </View>
       )}
@@ -1942,4 +1942,3 @@ const styles = StyleSheet.create((theme) => ({
 }));
 
 const FLEX_1_STYLE = { flex: 1 };
-const EMPTY_CARD_STYLE = [settingsStyles.card, styles.emptyCard];
