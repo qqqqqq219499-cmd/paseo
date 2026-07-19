@@ -872,13 +872,20 @@ function filterCodexThreadsByCwd(
   return threads.filter((thread) => typeof thread.cwd === "string" && matchesCwd(thread.cwd));
 }
 
-export function toAgentUsage(tokenUsage: unknown): AgentUsage | undefined {
+export function toAgentUsage(
+  tokenUsage: unknown,
+  forcedContextWindowMaxTokens?: number,
+): AgentUsage | undefined {
   const usage = toObjectRecord(tokenUsage);
   if (!usage) return undefined;
   const last = toObjectRecord(usage.last);
-  const contextWindowMaxTokens = firstPositiveFiniteNumber(
+  const reportedMax = firstPositiveFiniteNumber(
     usage.model_context_window,
     usage.modelContextWindow,
+  );
+  const contextWindowMaxTokens = firstPositiveFiniteNumber(
+    forcedContextWindowMaxTokens,
+    reportedMax,
   );
   const contextWindowUsedTokens = firstPositiveFiniteNumber(last?.total_tokens, last?.totalTokens);
   return {
@@ -3063,12 +3070,24 @@ function buildCodexCustomProviderConfig(
     providerConfig.env_key = "OPENAI_API_KEY";
     providerConfig.requires_openai_auth = false;
   }
-  return {
+  const config: Record<string, unknown> = {
     model_provider: customProvider.id,
     model_providers: {
       [customProvider.id]: providerConfig,
     },
   };
+  // Custom OpenAI-compatible providers (e.g. Grok via CPA) often fall back to
+  // Codex catalog defaults (~272k * 95% = 258k). Allow an explicit window via env.
+  const rawWindow =
+    runtimeSettings?.env?.MODEL_CONTEXT_WINDOW ??
+    runtimeSettings?.env?.CODEX_MODEL_CONTEXT_WINDOW;
+  if (typeof rawWindow === "string" && rawWindow.trim()) {
+    const windowTokens = Number(rawWindow);
+    if (Number.isFinite(windowTokens) && windowTokens > 0) {
+      config.model_context_window = Math.floor(windowTokens);
+    }
+  }
+  return config;
 }
 
 interface CodexSubAgentCallState {
@@ -5335,7 +5354,10 @@ export class CodexAppServerAgentSession implements AgentSession {
   private handleTokenUsageUpdatedNotification(
     parsed: Extract<ParsedCodexNotification, { kind: "token_usage_updated" }>,
   ): void {
-    this.latestUsage = toAgentUsage(parsed.tokenUsage);
+    const forcedWindow = firstPositiveFiniteNumber(
+      this.deps.customCodexConfig?.model_context_window,
+    );
+    this.latestUsage = toAgentUsage(parsed.tokenUsage, forcedWindow);
     if (this.latestUsage) {
       this.notifySubscribers({
         type: "usage_updated",

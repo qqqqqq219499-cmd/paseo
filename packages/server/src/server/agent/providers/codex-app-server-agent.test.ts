@@ -1055,6 +1055,89 @@ describe("Codex app-server provider", () => {
     });
   });
 
+  test("forwards MODEL_CONTEXT_WINDOW into custom Codex app-server config", async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), "codex-custom-window-"));
+    const fakeAppServerPath = path.join(tempDir, "fake-codex-app-server.cjs");
+    const capturedRequestsPath = path.join(tempDir, "requests.jsonl");
+    writeFileSync(
+      fakeAppServerPath,
+      `
+const fs = require("node:fs");
+const capturePath = process.env.PASEO_FAKE_CODEX_CAPTURE;
+let buffer = "";
+function record(method, params) {
+  fs.appendFileSync(capturePath, JSON.stringify({ kind: "request", method, params }) + "\\n");
+}
+function resultFor(method) {
+  if (method === "initialize") return {};
+  if (method === "collaborationMode/list") return { data: [] };
+  if (method === "skills/list") return { data: [] };
+  if (method === "config/read") return { config: {} };
+  if (method === "getUserSavedConfig") return { config: {} };
+  if (method === "model/list") return { data: [{ id: "grok-4.5", isDefault: true }] };
+  if (method === "thread/start") return { thread: { id: "thread-1" } };
+  if (method === "turn/start") return {};
+  return {};
+}
+process.stdin.on("data", (chunk) => {
+  buffer += chunk.toString();
+  for (;;) {
+    const newlineIndex = buffer.indexOf("\\n");
+    if (newlineIndex === -1) break;
+    const line = buffer.slice(0, newlineIndex).trim();
+    buffer = buffer.slice(newlineIndex + 1);
+    if (!line) continue;
+    const message = JSON.parse(line);
+    record(message.method, message.params);
+    process.stdout.write(JSON.stringify({ id: message.id, result: resultFor(message.method) }) + "\\n");
+  }
+});
+`,
+    );
+
+    const registry = buildProviderRegistry(createTestLogger(), {
+      providerOverrides: {
+        "grok-server": {
+          extends: "codex",
+          label: "Server Grok",
+          command: [process.execPath, fakeAppServerPath],
+          env: {
+            OPENAI_API_KEY: "sk-custom",
+            OPENAI_BASE_URL: "https://custom-relay.example.com/v1",
+            MODEL_CONTEXT_WINDOW: "500000",
+            PASEO_FAKE_CODEX_CAPTURE: capturedRequestsPath,
+          },
+        },
+      },
+    });
+    const session = await registry["grok-server"].createClient(createTestLogger()).createSession({
+      provider: "grok-server",
+      cwd: "/workspace/project",
+      modeId: "auto",
+      model: "grok-4.5",
+    });
+
+    try {
+      await session.startTurn("check window");
+      const capturedRequests = readFileSync(capturedRequestsPath, "utf8")
+        .trim()
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as CapturedFakeCodexRecord);
+      expect(capturedThreadStartConfig(capturedRequests)).toEqual({
+        model_provider: "grok-server",
+        model_context_window: 500000,
+        model_providers: {
+          "grok-server": expect.objectContaining({
+            base_url: "https://custom-relay.example.com/v1",
+          }),
+        },
+      });
+    } finally {
+      await session.close();
+    }
+  });
+
   test("resumeSession does not replace a persisted Codex thread when app-server resume fails", async () => {
     const threadRequests: string[] = [];
     const appServer = createFakeCodexAppServer({
