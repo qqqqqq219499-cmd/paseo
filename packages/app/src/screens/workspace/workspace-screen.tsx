@@ -405,6 +405,9 @@ function getFallbackTabOptionDescription(
   if (tab.target.kind === "provider_subagent") {
     return labels.agent;
   }
+  if (tab.target.kind === "swarm_board") {
+    return labels.agent;
+  }
   if (tab.target.kind === "commit_diff") {
     return tab.target.sha.slice(0, 7);
   }

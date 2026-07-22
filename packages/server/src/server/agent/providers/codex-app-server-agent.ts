@@ -3079,8 +3079,7 @@ function buildCodexCustomProviderConfig(
   // Custom OpenAI-compatible providers (e.g. Grok via CPA) often fall back to
   // Codex catalog defaults (~272k * 95% = 258k). Allow an explicit window via env.
   const rawWindow =
-    runtimeSettings?.env?.MODEL_CONTEXT_WINDOW ??
-    runtimeSettings?.env?.CODEX_MODEL_CONTEXT_WINDOW;
+    runtimeSettings?.env?.MODEL_CONTEXT_WINDOW ?? runtimeSettings?.env?.CODEX_MODEL_CONTEXT_WINDOW;
   if (typeof rawWindow === "string" && rawWindow.trim()) {
     const windowTokens = Number(rawWindow);
     if (Number.isFinite(windowTokens) && windowTokens > 0) {
@@ -5361,6 +5360,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   ): void {
     const forcedWindow = firstPositiveFiniteNumber(
       this.deps.customCodexConfig?.model_context_window,
+      undefined,
     );
     this.latestUsage = toAgentUsage(parsed.tokenUsage, forcedWindow);
     if (this.latestUsage) {

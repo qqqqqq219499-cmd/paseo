@@ -1386,6 +1386,9 @@ function ActiveAgentComposer({
     },
     [openTab],
   );
+  const handleOpenSwarmBoard = useCallback(() => {
+    openTab({ kind: "swarm_board", parentAgentId: agentId });
+  }, [agentId, openTab]);
   const handleArchiveSubagent = useArchiveSubagent({ serverId });
   const handleDetachSubagent = useDetachSubagent({ serverId });
   const handleHideFinishedProviderSubagents = useHideFinishedProviderSubagents({
@@ -1498,6 +1501,7 @@ function ActiveAgentComposer({
         onArchiveSubagent={handleArchiveSubagent}
         onArchiveFinished={handleHideFinishedProviderSubagents}
         onDetachSubagent={canDetachSubagents ? handleDetachSubagent : undefined}
+        onOpenSwarmBoard={handleOpenSwarmBoard}
       />
       <Composer
         agentId={agentId}

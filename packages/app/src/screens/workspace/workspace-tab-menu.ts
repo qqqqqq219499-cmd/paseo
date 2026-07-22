@@ -141,6 +141,9 @@ function getCloseButtonTestId(tab: WorkspaceTabDescriptor): string {
   if (tab.target.kind === "provider_subagent") {
     return `workspace-provider-subagent-close-${tab.target.subagentId}`;
   }
+  if (tab.target.kind === "swarm_board") {
+    return `workspace-swarm-board-close-${tab.target.parentAgentId}`;
+  }
   if (tab.target.kind === "commit_diff") {
     return `workspace-commit-diff-close-${encodeFilePathForPathSegment(tab.target.sha)}`;
   }

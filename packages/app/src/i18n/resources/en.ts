@@ -1531,6 +1531,20 @@ export const en = {
     archiveFinishedAction: "Archive finished subagents",
     archiveFinishedTooltip: "Archive finished",
   },
+  swarmBoard: {
+    title: "Swarm Board",
+    openAction: "Open swarm board",
+    openTooltip: "View all subagents as live cards",
+    empty: "No subagents yet",
+    toolCalls: "{{count}} tool calls",
+    status: {
+      running: "Running",
+      completed: "Completed",
+      failed: "Failed",
+      canceled: "Canceled",
+    },
+    lastActivityNone: "No activity yet",
+  },
   panels: {
     draft: {
       newAgent: "New Agent",
@@ -1818,6 +1832,15 @@ export const en = {
       autoExpandReasoning: {
         label: "Always expand reasoning",
         description: "Show agent thinking and chain-of-thought blocks fully expanded by default",
+      },
+      autoTranslateReasoning: {
+        label: "Auto-translate reasoning to Chinese",
+        description:
+          "When thinking is in English, auto-translate to Simplified Chinese after it finishes (free public MT; original still available)",
+        translating: "Translating thinking…",
+        translatedBadge: "Chinese translation",
+        showOriginal: "Show original",
+        showTranslation: "Show Chinese",
       },
       toolCallDetail: {
         label: "Tool call display",

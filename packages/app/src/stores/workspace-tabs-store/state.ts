@@ -20,6 +20,7 @@ export type WorkspaceTabTarget =
   | { kind: "draft"; draftId: string; setup?: WorkspaceDraftTabSetup }
   | { kind: "agent"; agentId: string }
   | { kind: "provider_subagent"; parentAgentId: string; subagentId: string }
+  | { kind: "swarm_board"; parentAgentId: string }
   | { kind: "terminal"; terminalId: string }
   | { kind: "browser"; browserId: string }
   | WorkspaceFileTabTarget
@@ -497,6 +498,30 @@ function extractMigrationRawSources(persistedState: unknown): MigrationRawSource
   };
 }
 
+function coerceAgentChildTabTarget(
+  kind: string | null,
+  raw: Record<string, unknown>,
+): WorkspaceTabTarget | null {
+  if (
+    kind === "provider_subagent" &&
+    typeof raw.parentAgentId === "string" &&
+    typeof raw.subagentId === "string"
+  ) {
+    return normalizeWorkspaceTabTarget({
+      kind: "provider_subagent",
+      parentAgentId: raw.parentAgentId,
+      subagentId: raw.subagentId,
+    });
+  }
+  if (kind === "swarm_board" && typeof raw.parentAgentId === "string") {
+    return normalizeWorkspaceTabTarget({
+      kind: "swarm_board",
+      parentAgentId: raw.parentAgentId,
+    });
+  }
+  return null;
+}
+
 function coerceWorkspaceTabTarget(raw: Record<string, unknown>): WorkspaceTabTarget | null {
   const kind = typeof raw.kind === "string" ? raw.kind : null;
   if (kind === "draft" && typeof raw.draftId === "string") {
@@ -510,16 +535,9 @@ function coerceWorkspaceTabTarget(raw: Record<string, unknown>): WorkspaceTabTar
   if (kind === "agent" && typeof raw.agentId === "string") {
     return normalizeWorkspaceTabTarget({ kind: "agent", agentId: raw.agentId });
   }
-  if (
-    kind === "provider_subagent" &&
-    typeof raw.parentAgentId === "string" &&
-    typeof raw.subagentId === "string"
-  ) {
-    return normalizeWorkspaceTabTarget({
-      kind: "provider_subagent",
-      parentAgentId: raw.parentAgentId,
-      subagentId: raw.subagentId,
-    });
+  const agentChildTarget = coerceAgentChildTabTarget(kind, raw);
+  if (agentChildTarget) {
+    return agentChildTarget;
   }
   if (kind === "terminal" && typeof raw.terminalId === "string") {
     return normalizeWorkspaceTabTarget({ kind: "terminal", terminalId: raw.terminalId });

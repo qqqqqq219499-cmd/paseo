@@ -1520,6 +1520,20 @@ export const ar: TranslationResources = {
     archiveFinishedAction: "أرشفة الوكلاء الفرعيين المكتملين",
     archiveFinishedTooltip: "أرشفة المكتملين",
   },
+  swarmBoard: {
+    title: "لوحة Swarm",
+    openAction: "فتح لوحة Swarm",
+    openTooltip: "عرض جميع الوكلاء الفرعيين كبطاقات مباشرة",
+    empty: "لا يوجد وكلاء فرعيون بعد",
+    toolCalls: "{{count}} من استدعاءات الأدوات",
+    status: {
+      running: "قيد التشغيل",
+      completed: "مكتمل",
+      failed: "فشل",
+      canceled: "تم الإلغاء",
+    },
+    lastActivityNone: "لا يوجد نشاط بعد",
+  },
   panels: {
     draft: {
       newAgent: "وكيل جديد",
@@ -1809,6 +1823,15 @@ export const ar: TranslationResources = {
       autoExpandReasoning: {
         label: "عرض التفكير دائماً",
         description: "إظهار تفكير الوكيل وخطوات الاستدلال بشكل كامل بشكل افتراضي",
+      },
+      autoTranslateReasoning: {
+        label: "Auto-translate reasoning to Chinese",
+        description:
+          "When thinking is in English, auto-translate to Simplified Chinese after it finishes (free public MT; original still available)",
+        translating: "Translating thinking…",
+        translatedBadge: "Chinese translation",
+        showOriginal: "Show original",
+        showTranslation: "Show Chinese",
       },
       toolCallDetail: {
         label: "عرض استدعاءات الأدوات",

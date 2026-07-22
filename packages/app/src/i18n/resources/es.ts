@@ -1563,6 +1563,20 @@ export const es: TranslationResources = {
     archiveFinishedAction: "Archivar subagentes finalizados",
     archiveFinishedTooltip: "Archivar finalizados",
   },
+  swarmBoard: {
+    title: "Panel Swarm",
+    openAction: "Abrir panel Swarm",
+    openTooltip: "Ver todos los subagentes como tarjetas en vivo",
+    empty: "Aún no hay subagentes",
+    toolCalls: "{{count}} llamadas a herramientas",
+    status: {
+      running: "En ejecución",
+      completed: "Completado",
+      failed: "Fallido",
+      canceled: "Cancelado",
+    },
+    lastActivityNone: "Aún no hay actividad",
+  },
   panels: {
     draft: {
       newAgent: "Nuevo agente",
@@ -1858,6 +1872,15 @@ export const es: TranslationResources = {
         label: "Siempre expandir razonamiento",
         description:
           "Mostrar los bloques de pensamiento y razonamiento del agente totalmente expandidos de forma predeterminada",
+      },
+      autoTranslateReasoning: {
+        label: "Auto-translate reasoning to Chinese",
+        description:
+          "When thinking is in English, auto-translate to Simplified Chinese after it finishes (free public MT; original still available)",
+        translating: "Translating thinking…",
+        translatedBadge: "Chinese translation",
+        showOriginal: "Show original",
+        showTranslation: "Show Chinese",
       },
       toolCallDetail: {
         label: "Visualización de llamadas a herramientas",

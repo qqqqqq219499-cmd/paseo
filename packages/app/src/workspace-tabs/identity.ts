@@ -28,6 +28,10 @@ export function normalizeWorkspaceTabTarget(
       ? { kind: "provider_subagent", parentAgentId, subagentId }
       : null;
   }
+  if (value.kind === "swarm_board") {
+    const parentAgentId = trimNonEmpty(value.parentAgentId);
+    return parentAgentId ? { kind: "swarm_board", parentAgentId } : null;
+  }
   if (value.kind === "file") {
     return normalizeFileTabTarget(value);
   }
@@ -95,20 +99,30 @@ export function workspaceTabTargetsEqual(
   if (left.kind === "draft" && right.kind === "draft") {
     return left.draftId === right.draftId && workspaceDraftTabSetupsEqual(left.setup, right.setup);
   }
+  if (left.kind === "provider_subagent" && right.kind === "provider_subagent") {
+    return left.parentAgentId === right.parentAgentId && left.subagentId === right.subagentId;
+  }
+  if (left.kind === "file" && right.kind === "file") {
+    return workspaceFileLocationsEqual(left, right);
+  }
+  return workspaceTabSimpleTargetsEqual(left, right);
+}
+
+function workspaceTabSimpleTargetsEqual(
+  left: WorkspaceTabTarget,
+  right: WorkspaceTabTarget,
+): boolean {
   if (left.kind === "agent" && right.kind === "agent") {
     return left.agentId === right.agentId;
   }
-  if (left.kind === "provider_subagent" && right.kind === "provider_subagent") {
-    return left.parentAgentId === right.parentAgentId && left.subagentId === right.subagentId;
+  if (left.kind === "swarm_board" && right.kind === "swarm_board") {
+    return left.parentAgentId === right.parentAgentId;
   }
   if (left.kind === "terminal" && right.kind === "terminal") {
     return left.terminalId === right.terminalId;
   }
   if (left.kind === "browser" && right.kind === "browser") {
     return left.browserId === right.browserId;
-  }
-  if (left.kind === "file" && right.kind === "file") {
-    return workspaceFileLocationsEqual(left, right);
   }
   if (left.kind === "setup" && right.kind === "setup") {
     return left.workspaceId === right.workspaceId;
@@ -161,6 +175,9 @@ export function buildDeterministicWorkspaceTabId(target: WorkspaceTabTarget): st
   }
   if (target.kind === "provider_subagent") {
     return `provider_subagent_${target.parentAgentId.length}_${target.parentAgentId}_${target.subagentId.length}_${target.subagentId}`;
+  }
+  if (target.kind === "swarm_board") {
+    return `swarm_board_${target.parentAgentId.length}_${target.parentAgentId}`;
   }
   if (target.kind === "terminal") {
     return `terminal_${target.terminalId}`;

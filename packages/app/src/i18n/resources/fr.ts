@@ -1566,6 +1566,20 @@ export const fr: TranslationResources = {
     archiveFinishedAction: "Archiver les sous-agents terminés",
     archiveFinishedTooltip: "Archiver les terminés",
   },
+  swarmBoard: {
+    title: "Tableau Swarm",
+    openAction: "Ouvrir le tableau Swarm",
+    openTooltip: "Voir tous les sous-agents sous forme de cartes en direct",
+    empty: "Aucun sous-agent pour le moment",
+    toolCalls: "{{count}} appels d'outils",
+    status: {
+      running: "En cours",
+      completed: "Terminé",
+      failed: "Échec",
+      canceled: "Annulé",
+    },
+    lastActivityNone: "Aucune activité pour le moment",
+  },
   panels: {
     draft: {
       newAgent: "Nouvel agent",
@@ -1857,6 +1871,15 @@ export const fr: TranslationResources = {
       autoExpandReasoning: {
         label: "Toujours afficher le raisonnement",
         description: "Afficher le raisonnement de l'agent entièrement développé par défaut",
+      },
+      autoTranslateReasoning: {
+        label: "Auto-translate reasoning to Chinese",
+        description:
+          "When thinking is in English, auto-translate to Simplified Chinese after it finishes (free public MT; original still available)",
+        translating: "Translating thinking…",
+        translatedBadge: "Chinese translation",
+        showOriginal: "Show original",
+        showTranslation: "Show Chinese",
       },
       toolCallDetail: {
         label: "Affichage des appels d’outils",

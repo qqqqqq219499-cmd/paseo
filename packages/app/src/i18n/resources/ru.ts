@@ -1554,6 +1554,20 @@ export const ru: TranslationResources = {
     archiveFinishedAction: "Архивировать завершенные субагенты",
     archiveFinishedTooltip: "Архивировать завершенные",
   },
+  swarmBoard: {
+    title: "Панель Swarm",
+    openAction: "Открыть панель Swarm",
+    openTooltip: "Просмотреть всех субагентов в виде живых карточек",
+    empty: "Пока нет субагентов",
+    toolCalls: "{{count}} вызовов инструментов",
+    status: {
+      running: "Выполняется",
+      completed: "Завершено",
+      failed: "Ошибка",
+      canceled: "Отменено",
+    },
+    lastActivityNone: "Пока нет активности",
+  },
   panels: {
     draft: {
       newAgent: "Новый агент",
@@ -1843,6 +1857,15 @@ export const ru: TranslationResources = {
         label: "Всегда разворачивать размышления",
         description:
           "По умолчанию показывать блоки размышлений и логики агента полностью развернутыми",
+      },
+      autoTranslateReasoning: {
+        label: "Auto-translate reasoning to Chinese",
+        description:
+          "When thinking is in English, auto-translate to Simplified Chinese after it finishes (free public MT; original still available)",
+        translating: "Translating thinking…",
+        translatedBadge: "Chinese translation",
+        showOriginal: "Show original",
+        showTranslation: "Show Chinese",
       },
       toolCallDetail: {
         label: "Отображение вызовов инструментов",

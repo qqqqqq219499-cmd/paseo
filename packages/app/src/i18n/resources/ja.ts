@@ -1536,6 +1536,20 @@ export const ja: TranslationResources = {
     archiveFinishedAction: "完了したサブエージェントをアーカイブ",
     archiveFinishedTooltip: "完了した項目をアーカイブ",
   },
+  swarmBoard: {
+    title: "Swarm ボード",
+    openAction: "Swarm ボードを開く",
+    openTooltip: "すべてのサブエージェントをライブカードで表示",
+    empty: "サブエージェントはまだありません",
+    toolCalls: "{{count}} 回のツール呼び出し",
+    status: {
+      running: "実行中",
+      completed: "完了",
+      failed: "失敗",
+      canceled: "キャンセル済み",
+    },
+    lastActivityNone: "アクティビティはまだありません",
+  },
   panels: {
     draft: {
       newAgent: "新しいエージェント",
@@ -1824,6 +1838,15 @@ export const ja: TranslationResources = {
       autoExpandReasoning: {
         label: "常に思考プロセスを展開",
         description: "デフォルトでAIのエージェント思考・推論ブロックを完全に展開して表示します",
+      },
+      autoTranslateReasoning: {
+        label: "Auto-translate reasoning to Chinese",
+        description:
+          "When thinking is in English, auto-translate to Simplified Chinese after it finishes (free public MT; original still available)",
+        translating: "Translating thinking…",
+        translatedBadge: "Chinese translation",
+        showOriginal: "Show original",
+        showTranslation: "Show Chinese",
       },
       toolCallDetail: {
         label: "ツール呼び出しの表示",

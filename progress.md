@@ -391,3 +391,64 @@
 - Local WIP (reasoning translate, appearance, i18n keys, provider registry, etc.) restored as unstaged after stash; not part of this merge.
 - Rollback: `git revert -m 1 fa47ed1c9` then revert the failover fix commit if needed.
 
+## 2026-07-22 - Task: Swarm Board 多 Agent 实时卡片面板
+
+### What was done
+
+- 新增 Paseo 原生 Swarm Board 面板（参照 kimi-code SwarmTool 卡片式设计），将父 Agent 的全部 provider subagents 以实时卡片网格展示：provider 图标、标题、四态徽标、工具调用数、最近活动摘要、实时耗时。
+- 点击卡片打开既有 provider_subagent 详情面板。
+- 新增 tab target kind `swarm_board`，并接入 workspace-tabs / register-panels / track.tsx / agent-panel.tsx。
+- SubagentsTrack 头部新增 LayoutGrid 入口按钮。
+- 完成 8 语言 i18n（en、zh-CN、ja、fr、es、pt-BR、ru、ar）。
+
+### Testing
+
+- `swarm-cards.test.ts`：14/14 通过。
+- `swarm-board-panel.test.tsx`：5/5 通过。
+- `identity.test.ts`：8/8 通过。
+- `resources.test.ts`：32/32 通过。
+- 回归：provider-store / track-presentation / workspace-subagents-integration 全部通过。
+- Typecheck：`npm run typecheck --workspace=@getpaseo/app` 0 错误。
+- Lint：改动文件 lint 0 警告。
+- 注意：tsx 测试需从 `packages/app` 目录执行，不能在仓库根目录直接跑。
+
+### Notes
+
+- `packages/app/src/subagents/swarm-cards.ts` - 新增 Swarm Board 卡片数据层（聚合父 Agent 的 provider subagents、四态徽标、活动摘要、实时耗时）。
+- `packages/app/src/subagents/swarm-cards.test.ts` - 新增卡片数据层测试（14 例）。
+- `packages/app/src/panels/swarm-board-panel.tsx` - 新增 Swarm Board 面板 UI（实时卡片网格）。
+- `packages/app/src/panels/swarm-board-panel.test.tsx` - 新增面板测试（5 例）。
+- `packages/app/src/stores/workspace-tabs-store/state.ts` - 新增 tab target kind `swarm_board`。
+- `packages/app/src/workspace-tabs/identity.ts` - 接入 `swarm_board` tab 身份标识。
+- `packages/app/src/screens/workspace/workspace-tab-menu.ts` - 接入 Swarm Board tab 菜单项。
+- `packages/app/src/screens/workspace/workspace-screen.tsx` - 接入 Swarm Board 面板渲染。
+- `packages/app/src/panels/register-panels.ts` - 注册 Swarm Board 面板。
+- `packages/app/src/panels/agent-panel.tsx` - 卡片点击打开既有 provider_subagent 详情面板。
+- `packages/app/src/subagents/track.tsx` - SubagentsTrack 头部新增 LayoutGrid 入口按钮。
+- `packages/app/test-stubs/lucide-react-native.ts` - 补充 LayoutGrid 图标测试桩。
+- `packages/app/src/i18n/resources/{en,zh-CN,ja,fr,es,pt-BR,ru,ar}.ts` - 新增 Swarm Board 面板文案（8 语言）。
+- `progress.md` - 追加本任务记录。
+- 注意：上述部分修改文件同时携带本任务之前的未提交 WIP（早前 merge 记录中 stash 还原的内容），执行下方 rollback 的 `git restore` 会一并还原，操作前需先核对。
+- Rollback point: `f58c95174` (HEAD before this task；本任务未做任何 commit，全部改动保留在工作区). Restore tracked paths with `git restore -- packages/app/src/stores/workspace-tabs-store/state.ts packages/app/src/workspace-tabs/identity.ts packages/app/src/screens/workspace/workspace-tab-menu.ts packages/app/src/screens/workspace/workspace-screen.tsx packages/app/src/panels/register-panels.ts packages/app/src/panels/agent-panel.tsx packages/app/src/subagents/track.tsx packages/app/test-stubs/lucide-react-native.ts packages/app/src/i18n/resources/en.ts packages/app/src/i18n/resources/zh-CN.ts packages/app/src/i18n/resources/ja.ts packages/app/src/i18n/resources/fr.ts packages/app/src/i18n/resources/es.ts packages/app/src/i18n/resources/pt-BR.ts packages/app/src/i18n/resources/ru.ts packages/app/src/i18n/resources/ar.ts` and remove this task's new files with `Remove-Item -LiteralPath packages/app/src/subagents/swarm-cards.ts,packages/app/src/subagents/swarm-cards.test.ts,packages/app/src/panels/swarm-board-panel.tsx,packages/app/src/panels/swarm-board-panel.test.tsx`.
+
+## 2026-07-22 - Task: Merge official main (0.2.0-beta.2) + package Windows desktop
+
+### What was done
+
+- Fetched and merged origin/main (9 commits incl. official 0.2.0-beta.2 cut) into feature/grok-accounts-zh-i18n; clean ort merge, no conflicts.
+- Restored local WIP (Swarm Board + related) via stash pop after merge.
+- typecheck server/app 0; grok auto-failover 24/24 pass.
+- Built Windows desktop package under Node v24.14.1 (repo .tool-versions prefers 22.20.0; build succeeded).
+
+### Artifacts (x64 preferred)
+
+- packages/desktop/release/Paseo-Setup-0.2.0-beta.2-x64.exe — 115,909,035 bytes — SHA256 2D9BF51E103C442E58AC8B937635421DD927526DBB47DB510A8B0DE19B5491F5
+- packages/desktop/release/Paseo-Setup-0.2.0-beta.2-x64.zip — 160,775,197 bytes — SHA256 891D40352D6955449AB2FA91F6EEFBE2E15CF03719AA69C739D5DFC5CD1A692A
+- Also produced arm64 + combined installers.
+- win-unpacked Paseo.exe FileVersion 0.2.0-beta.2
+- Swarm Board present in exported web bundle (uncommitted WIP included in this package).
+
+### Risks
+
+- Authenticode unsigned (SmartScreen possible).
+- Local WIP not committed; package includes working-tree Swarm Board + other unstaged changes.

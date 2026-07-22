@@ -1501,6 +1501,20 @@ export const zhCN: TranslationResources = {
     archiveFinishedAction: "归档已完成的 subagent",
     archiveFinishedTooltip: "归档已完成项",
   },
+  swarmBoard: {
+    title: "Swarm 面板",
+    openAction: "打开 Swarm 面板",
+    openTooltip: "以实时卡片查看所有 subagent",
+    empty: "还没有 subagent",
+    toolCalls: "{{count}} 次工具调用",
+    status: {
+      running: "运行中",
+      completed: "已完成",
+      failed: "失败",
+      canceled: "已取消",
+    },
+    lastActivityNone: "暂无活动",
+  },
   panels: {
     draft: {
       newAgent: "新建 Agent",
@@ -1785,6 +1799,14 @@ export const zhCN: TranslationResources = {
       autoExpandReasoning: {
         label: "始终展开推理过程",
         description: "默认情况下完全展开 AI 的思考和推理过程",
+      },
+      autoTranslateReasoning: {
+        label: "思考过程自动译成中文",
+        description: "模型用英文思考时，结束后自动译成中文（免费翻译接口，仍可看原文）",
+        translating: "正在把思考译成中文…",
+        translatedBadge: "已译成中文",
+        showOriginal: "看英文原文",
+        showTranslation: "看中文译文",
       },
       toolCallDetail: {
         label: "工具调用显示",

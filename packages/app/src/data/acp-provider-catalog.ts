@@ -256,7 +256,7 @@ const CATALOG_DATA = [
     id: "kimi",
     title: "Kimi Code CLI",
     description: "Moonshot AI's open-source terminal coding agent",
-    version: "0.11.0",
+    version: "0.28.0",
     iconId: "kimi",
     installLink: "https://github.com/MoonshotAI/kimi-code",
     command: ["kimi", "acp"],
