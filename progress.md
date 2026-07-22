@@ -369,3 +369,25 @@
 - Dependency collection note: electron-builder logged npm `ELSPROBLEMS` warnings for extraneous WASM packages and a missing optional CodeMirror peer, but packaging and the real packaged-app smoke both completed successfully.
 - Smoke artifact note: `PASEO_DESKTOP_SMOKE_ARTIFACT_DIR` is failure-only, so no failure directory was created after this successful run.
 - Rollback point: `c62855299`. Remove the version-specific `Paseo-Setup-0.2.0-beta.1*` files and the two generated unpacked directories under `packages/desktop/release/`; rebuild the desired prior commit to regenerate `latest.yml` and `builder-debug.yml`. Revert the packaging record commit separately with `git revert <package-record-commit>`.
+
+## 2026-07-22 - Task: Merge official Paseo origin/main (post 0.2.0-beta.1)
+
+### What was done
+
+- Fetched and merged `origin/main` through `4a4556f49` into `feature/grok-accounts-zh-i18n` (44 upstream commits; branch no longer behind official main).
+- Resolved conflicts in `packages/app/src/components/left-sidebar.tsx` (kept new-theme flat footer + official `FooterAddProjectButton` for classic footer) and `packages/app/src/screens/settings-screen.tsx` (kept `resolveActiveHostServerId` + desktop drag styles).
+- Took official `package-lock.json` / highlight dependency pins; rebuilt `@getpaseo/protocol`, `@getpaseo/highlight`, `@getpaseo/client` dist.
+- Fixed local Grok auto-failover after official `AgentRunOptions.messageId` -> `clientMessageId` rename.
+
+### Testing
+
+- `npm run typecheck --workspace=@getpaseo/app` exited 0 after rebuilding protocol/highlight/client.
+- `npm run typecheck --workspace=@getpaseo/server` exited 0 after failover field rename.
+- `npx vitest run packages/server/src/server/agent/providers/grok/auto-failover.test.ts --bail=1` passed 24 tests.
+
+### Notes
+
+- Merge commit: `fa47ed1c9`. Follow-up fix commit applies `clientMessageId` strip only.
+- Local WIP (reasoning translate, appearance, i18n keys, provider registry, etc.) restored as unstaged after stash; not part of this merge.
+- Rollback: `git revert -m 1 fa47ed1c9` then revert the failover fix commit if needed.
+

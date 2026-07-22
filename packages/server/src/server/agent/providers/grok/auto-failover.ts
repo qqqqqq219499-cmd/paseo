@@ -609,7 +609,7 @@ function withoutMessageIdentity(options: AgentRunOptions | undefined): AgentRunO
   if (!options) {
     return undefined;
   }
-  const { messageId: _messageId, resumeFrom: _resumeFrom, ...rest } = options;
+  const { clientMessageId: _clientMessageId, resumeFrom: _resumeFrom, ...rest } = options;
   return rest;
 }
 
