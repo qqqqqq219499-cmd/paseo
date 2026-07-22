@@ -4,6 +4,8 @@ import { z } from "zod";
 import type { AgentCapabilityFlags } from "../agent-sdk-types.js";
 import { checkProviderLaunchAvailable, resolveProviderLaunch } from "../provider-launch-config.js";
 import type { AgentMode } from "../agent-sdk-types.js";
+import type { ClientSideConnection, SessionConfigOption } from "@agentclientprotocol/sdk";
+
 import {
   ACPAgentClient,
   type ACPClientCapabilityMeta,
@@ -55,6 +57,12 @@ interface GenericACPAgentClientOptions {
   configFeatureOptions?: ACPConfigFeatureOption[];
   extensionCommandsParser?: ACPExtensionCommandsParser;
   sessionResponseTransformer?: (response: SessionStateResponse) => SessionStateResponse;
+  configOptionsTransformer?: (configOptions: SessionConfigOption[]) => SessionConfigOption[];
+  thinkingOptionWriter?: (
+    connection: ClientSideConnection,
+    sessionId: string,
+    thinkingOptionId: string,
+  ) => Promise<void>;
   defaultModes?: AgentMode[];
   modeIdTransformer?: (modeId: string) => string | null;
   contextUsageResolver?: ACPContextUsageResolver;
@@ -83,6 +91,8 @@ export class GenericACPAgentClient extends ACPAgentClient {
       configFeatureOptions: options.configFeatureOptions,
       extensionCommandsParser: options.extensionCommandsParser,
       sessionResponseTransformer: options.sessionResponseTransformer,
+      configOptionsTransformer: options.configOptionsTransformer,
+      thinkingOptionWriter: options.thinkingOptionWriter,
       defaultModes: options.defaultModes,
       modeIdTransformer: options.modeIdTransformer,
       contextUsageResolver: options.contextUsageResolver,
