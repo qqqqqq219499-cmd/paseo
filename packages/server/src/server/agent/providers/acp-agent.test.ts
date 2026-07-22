@@ -2587,7 +2587,9 @@ describe("ACPAgentSession", () => {
       events.push(event);
     });
 
-    const { turnId } = await session.startTurn("hello", { messageId: "msg-client-1" });
+    const { turnId } = await session.startTurn("hello", {
+      clientMessageId: "msg-client-1",
+    });
 
     expect(prompt).toHaveBeenCalledWith({
       sessionId: "session-1",
@@ -2601,7 +2603,12 @@ describe("ACPAgentSession", () => {
         type: "timeline",
         provider: "claude-acp",
         turnId,
-        item: { type: "user_message", text: "hello", messageId: "msg-client-1" },
+        item: {
+          type: "user_message",
+          text: "hello",
+          messageId: "msg-client-1",
+          clientMessageId: "msg-client-1",
+        },
       },
     ]);
 
@@ -2620,7 +2627,7 @@ describe("ACPAgentSession", () => {
       events.push(event);
     });
 
-    await session.startTurn("hello", { messageId: "msg-client-1" });
+    await session.startTurn("hello", { clientMessageId: "msg-client-1" });
     await session.sessionUpdate({
       sessionId: "session-1",
       update: {
@@ -2647,7 +2654,7 @@ describe("ACPAgentSession", () => {
       events.push(event);
     });
 
-    await session.startTurn("hello", { messageId: "msg-client-1" });
+    await session.startTurn("hello", { clientMessageId: "msg-client-1" });
     await session.sessionUpdate({
       sessionId: "session-1",
       update: {
@@ -2662,7 +2669,12 @@ describe("ACPAgentSession", () => {
       {
         type: "timeline",
         provider: "claude-acp",
-        item: { type: "user_message", text: "hello", messageId: "msg-client-1" },
+        item: {
+          type: "user_message",
+          text: "hello",
+          messageId: "msg-client-1",
+          clientMessageId: "msg-client-1",
+        },
         turnId: expect.any(String),
       },
     ]);
@@ -2686,7 +2698,7 @@ describe("ACPAgentSession", () => {
       events.push(event);
     });
 
-    await session.startTurn("first", { messageId: "msg-client-1" });
+    await session.startTurn("first", { clientMessageId: "msg-client-1" });
     await session.sessionUpdate({
       sessionId: "session-1",
       update: {
@@ -2698,7 +2710,7 @@ describe("ACPAgentSession", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    await session.startTurn("second", { messageId: "msg-client-2" });
+    await session.startTurn("second", { clientMessageId: "msg-client-2" });
     await session.sessionUpdate({
       sessionId: "session-1",
       update: {
@@ -2713,13 +2725,23 @@ describe("ACPAgentSession", () => {
       {
         type: "timeline",
         provider: "claude-acp",
-        item: { type: "user_message", text: "first", messageId: "msg-client-1" },
+        item: {
+          type: "user_message",
+          text: "first",
+          messageId: "msg-client-1",
+          clientMessageId: "msg-client-1",
+        },
         turnId: expect.any(String),
       },
       {
         type: "timeline",
         provider: "claude-acp",
-        item: { type: "user_message", text: "second", messageId: "msg-client-2" },
+        item: {
+          type: "user_message",
+          text: "second",
+          messageId: "msg-client-2",
+          clientMessageId: "msg-client-2",
+        },
         turnId: expect.any(String),
       },
     ]);
@@ -2737,7 +2759,7 @@ describe("ACPAgentSession", () => {
       events.push(event);
     });
 
-    await session.startTurn("hello", { messageId: "msg-client-1" });
+    await session.startTurn("hello", { clientMessageId: "msg-client-1" });
     await session.sessionUpdate({
       sessionId: "session-1",
       update: {
@@ -2753,7 +2775,12 @@ describe("ACPAgentSession", () => {
       {
         type: "timeline",
         provider: "claude-acp",
-        item: { type: "user_message", text: "hello", messageId: "msg-client-1" },
+        item: {
+          type: "user_message",
+          text: "hello",
+          messageId: "msg-client-1",
+          clientMessageId: "msg-client-1",
+        },
         turnId: expect.any(String),
       },
     ]);

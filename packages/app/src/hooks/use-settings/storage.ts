@@ -47,6 +47,7 @@ export interface AppSettings {
   newThemeEnabled: boolean; // standalone redesigned "new theme", independent of `theme`
   autoExpandReasoning: boolean;
   toolCallDetailLevel: ToolCallDetailLevel;
+  vimKeybindings: boolean;
 }
 
 export interface Settings extends AppSettings {
@@ -71,6 +72,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   newThemeEnabled: DEFAULT_NEW_THEME_ENABLED,
   autoExpandReasoning: false,
   toolCallDetailLevel: "detailed",
+  vimKeybindings: false,
 };
 
 export const DEFAULT_APP_SETTINGS: Settings = {
@@ -237,6 +239,9 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   }
   if (typeof stored.syntaxTheme === "string" && isSyntaxThemeId(stored.syntaxTheme)) {
     result.syntaxTheme = stored.syntaxTheme;
+  }
+  if (typeof stored.vimKeybindings === "boolean") {
+    result.vimKeybindings = stored.vimKeybindings;
   }
   if (
     typeof stored.workspaceTitleSource === "string" &&
