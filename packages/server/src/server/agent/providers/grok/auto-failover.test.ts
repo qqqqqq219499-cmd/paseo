@@ -72,7 +72,7 @@ class FakeGrokSession implements AgentSession {
       item: {
         type: "user_message",
         text: typeof prompt === "string" ? prompt : "[structured prompt]",
-        messageId: options?.messageId,
+        messageId: options?.clientMessageId,
       },
     });
     this.onStart?.();
@@ -289,14 +289,14 @@ describe("Grok automatic account recovery", () => {
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    await session.startTurn("continue the task", { messageId: "visible-message" });
+    await session.startTurn("continue the task", { clientMessageId: "visible-message" });
     await resumedStarted.promise;
 
     expect(resumeSources).toEqual(["session-1"]);
     expect(source.closed).toBe(true);
     expect(source.prompts).toEqual([]);
     expect(resumed.prompts).toEqual([
-      { prompt: "continue the task", options: { messageId: "visible-message" } },
+      { prompt: "continue the task", options: { clientMessageId: "visible-message" } },
     ]);
     expect(session.describePersistence()?.sessionId).toBe("session-1");
     expect(events.filter((event) => event.type === "timeline")).toHaveLength(1);
@@ -323,7 +323,7 @@ describe("Grok automatic account recovery", () => {
     });
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
-    const started = await session.startTurn("finish the migration", { messageId: "message-1" });
+    const started = await session.startTurn("finish the migration", { clientMessageId: "message-1" });
     await sourceStarted.promise;
 
     source.fail("Internal error: API error: Grok Build usage balance exhausted", {
