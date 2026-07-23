@@ -425,6 +425,13 @@ export const zhCN: TranslationResources = {
       copyBranchName: "复制分支名称",
       copied: "已复制",
     },
+    fileActions: {
+      openFile: "打开文件",
+      copyPath: "复制路径",
+      download: "下载",
+      addToChat: "添加到聊天…",
+      moreActions: "更多操作",
+    },
     fileExplorer: {
       sort: {
         name: "名称",
@@ -434,8 +441,6 @@ export const zhCN: TranslationResources = {
       context: {
         size: "大小",
         modified: "修改时间",
-        copyPath: "复制路径",
-        download: "下载",
       },
       actions: {
         back: "返回",
@@ -804,6 +809,8 @@ export const zhCN: TranslationResources = {
         },
       },
       diff: {
+        openChangesTab: "打开“更改”标签页",
+        closeChangesTab: "关闭“更改”标签页",
         binaryFile: "二进制文件",
         tooLarge: "Diff 过大，无法显示",
         unified: "Unified diff",
@@ -839,7 +846,7 @@ export const zhCN: TranslationResources = {
         deletedFile: "已删除",
         commits: {
           title: "提交",
-          countLabel: "最近 {{count}} 个提交",
+          countLabel: "{{count}} 个工作区提交",
           fileDiffEmpty: "没有可显示的更改",
           fileDiffError: "加载文件差异失败",
           loading: "正在加载提交…",
@@ -1551,6 +1558,8 @@ export const zhCN: TranslationResources = {
       changesLabel: "更改",
       changesSubtitle: "工作区差异",
       commitSubtitle: "提交差异",
+      uncommittedSubtitle: "未提交的更改",
+      baseSubtitle: "与 {{baseRef}} 比较",
       directoryMissing: "未找到 workspace 目录。",
       empty: "没有更改",
       loadError: "加载差异失败",

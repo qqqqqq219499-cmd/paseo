@@ -429,6 +429,13 @@ export const es: TranslationResources = {
       copyBranchName: "Copiar nombre de rama",
       copied: "Copiado",
     },
+    fileActions: {
+      openFile: "Abrir archivo",
+      copyPath: "Copiar ruta",
+      download: "Descargar",
+      addToChat: "Añadir al chat…",
+      moreActions: "Más acciones",
+    },
     fileExplorer: {
       sort: {
         name: "Nombre",
@@ -438,8 +445,6 @@ export const es: TranslationResources = {
       context: {
         size: "Tamaño",
         modified: "Modificado",
-        copyPath: "Copiar ruta",
-        download: "Descargar",
       },
       actions: {
         back: "Atrás",
@@ -843,6 +848,8 @@ export const es: TranslationResources = {
         },
       },
       diff: {
+        openChangesTab: "Abrir la pestaña Cambios",
+        closeChangesTab: "Cerrar la pestaña Cambios",
         binaryFile: "archivo binario",
         tooLarge: "La diferencia es demasiado grande para mostrarse",
         unified: "Diferencia unificada",
@@ -878,7 +885,7 @@ export const es: TranslationResources = {
         deletedFile: "Eliminado",
         commits: {
           title: "Commits",
-          countLabel: "{{count}} commits recientes",
+          countLabel: "{{count}} commits del espacio de trabajo",
           fileDiffEmpty: "No hay cambios para mostrar",
           fileDiffError: "Error al cargar el diff del archivo",
           loading: "Cargando commits…",
@@ -1613,6 +1620,8 @@ export const es: TranslationResources = {
       changesLabel: "Cambios",
       changesSubtitle: "Diferencias del árbol de trabajo",
       commitSubtitle: "Diferencias del commit",
+      uncommittedSubtitle: "Cambios sin confirmar",
+      baseSubtitle: "Comparado con {{baseRef}}",
       directoryMissing: "No se encontró el directorio de Workspace.",
       empty: "Sin cambios",
       loadError: "No se pudieron cargar las diferencias",

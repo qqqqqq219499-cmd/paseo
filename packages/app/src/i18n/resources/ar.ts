@@ -425,6 +425,13 @@ export const ar: TranslationResources = {
       copyBranchName: "نسخ اسم الفرع",
       copied: "تم النسخ",
     },
+    fileActions: {
+      openFile: "افتح الملف",
+      copyPath: "نسخ المسار",
+      download: "تحميل",
+      addToChat: "إضافة إلى الدردشة…",
+      moreActions: "المزيد من الإجراءات",
+    },
     fileExplorer: {
       sort: {
         name: "اسم",
@@ -434,8 +441,6 @@ export const ar: TranslationResources = {
       context: {
         size: "مقاس",
         modified: "معدل",
-        copyPath: "نسخ المسار",
-        download: "تحميل",
       },
       actions: {
         back: "خلف",
@@ -812,6 +817,8 @@ export const ar: TranslationResources = {
         },
       },
       diff: {
+        openChangesTab: "فتح علامة تبويب التغييرات",
+        closeChangesTab: "إغلاق علامة تبويب التغييرات",
         binaryFile: "ملف ثنائي",
         tooLarge: "الفرق كبير جدًا بحيث لا يمكن عرضه",
         unified: "الفرق الموحدة",
@@ -847,7 +854,7 @@ export const ar: TranslationResources = {
         deletedFile: "تم الحذف",
         commits: {
           title: "الإيداعات",
-          countLabel: "{{count}} من الإيداعات الأخيرة",
+          countLabel: "{{count}} من إيداعات مساحة العمل",
           fileDiffEmpty: "لا توجد تغييرات لعرضها",
           fileDiffError: "تعذّر تحميل فروق الملف",
           loading: "جارٍ تحميل الإيداعات…",
@@ -1570,6 +1577,8 @@ export const ar: TranslationResources = {
       changesLabel: "التغييرات",
       changesSubtitle: "فروقات شجرة العمل",
       commitSubtitle: "فروقات الالتزام",
+      uncommittedSubtitle: "تغييرات غير ملتزم بها",
+      baseSubtitle: "مقارنة مع {{baseRef}}",
       directoryMissing: "لم يتم العثور على دليل Workspace.",
       empty: "لا توجد تغييرات",
       loadError: "فشل تحميل الفروقات",

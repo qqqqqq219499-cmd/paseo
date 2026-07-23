@@ -662,6 +662,7 @@ export const AgentStreamEventPayloadSchema = z.discriminatedUnion("type", [
         body: z.string(),
         data: z.object({
           serverId: z.string(),
+          workspaceId: z.string().optional(),
           agentId: z.string(),
           reason: z.enum(["finished", "error", "permission"]),
         }),
@@ -1778,6 +1779,8 @@ const CheckoutCommitSchema = z.object({
   authorName: z.string(),
   authorDate: z.string(), // ISO 8601
   isOnRemote: z.boolean(), // false = local-only (unpushed)
+  // COMPAT(commitBaseClassification): added in v0.2.0, remove optional after 2027-01-23.
+  isOnBase: z.boolean().optional(),
   files: z.array(CheckoutCommitFileSchema),
 });
 
@@ -2828,6 +2831,8 @@ export const ServerInfoStatusPayloadSchema = z
         projectCreateDirectory: z.boolean().optional(),
         // COMPAT(commitsList): added in v0.1.110, remove gate after 2027-01-16.
         commitsList: z.boolean().optional(),
+        // COMPAT(commitBaseClassification): added in v0.2.0, remove gate after 2027-01-23.
+        commitBaseClassification: z.boolean().optional(),
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: z.boolean().optional(),
         // COMPAT(grokAccounts): added in v0.1.124, remove gate after 2027-01-11.
@@ -3618,6 +3623,7 @@ export const AgentAttentionRequiredMessageSchema = z.object({
         body: z.string(),
         data: z.object({
           serverId: z.string(),
+          workspaceId: z.string().optional(),
           agentId: z.string(),
           reason: z.enum(["finished", "error", "permission"]),
         }),

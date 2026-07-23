@@ -79,14 +79,17 @@ import { selectIsFileExplorerOpen, usePanelStore } from "@/stores/panel-store";
 import { type ExplorerCheckoutContext } from "@/stores/explorer-checkout-context";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import {
-  buildWorkspaceTabPersistenceKey,
   collectAllTabs,
   getFocusedBrowserId,
   type WorkspaceLayout,
   useWorkspaceLayoutStore,
   useWorkspaceLayoutStoreHydrated,
 } from "@/stores/workspace-layout-store";
-import type { WorkspaceTab, WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
+import {
+  buildWorkspaceTabPersistenceKey,
+  type WorkspaceTab,
+  type WorkspaceTabTarget,
+} from "@/workspace-tabs/model";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
@@ -302,11 +305,13 @@ interface WorkspaceScreenProps {
   workspaceId: string;
   isRouteFocused?: boolean;
   recoveryRequested?: boolean;
+  recoveryAgentId?: string | null;
 }
 
 type WorkspaceScreenContentProps = WorkspaceScreenProps & {
   isRouteFocused: boolean;
   recoveryRequested: boolean;
+  recoveryAgentId: string | null;
 };
 
 function trimNonEmpty(value: string | null | undefined): string | null {
@@ -354,6 +359,7 @@ function getFallbackTabOptionLabel(
     terminal: string;
     browser: string;
     agent: string;
+    changes: string;
   },
 ): string {
   if (tab.target.kind === "draft") {
@@ -371,6 +377,9 @@ function getFallbackTabOptionLabel(
   if (tab.target.kind === "file") {
     return tab.target.path.split("/").findLast(Boolean) ?? tab.target.path;
   }
+  if (tab.target.kind === "working_diff") {
+    return labels.changes;
+  }
   if (tab.target.kind === "commit_diff") {
     return tab.target.sha.slice(0, 7);
   }
@@ -385,6 +394,7 @@ function getFallbackTabOptionDescription(
     agent: string;
     terminal: string;
     browser: string;
+    changes: string;
   },
 ): string {
   if (tab.target.kind === "draft") {
@@ -410,6 +420,9 @@ function getFallbackTabOptionDescription(
   }
   if (tab.target.kind === "commit_diff") {
     return tab.target.sha.slice(0, 7);
+  }
+  if (tab.target.kind === "working_diff") {
+    return labels.changes;
   }
   return tab.target.path;
 }
@@ -683,6 +696,7 @@ function MobileWorkspaceTabOption({
       terminal: t("workspace.tabs.fallback.terminal"),
       browser: t("workspace.tabs.fallback.browser"),
       agent: t("workspace.tabs.fallback.agent"),
+      changes: t("panels.diff.changesLabel"),
     }),
     [t],
   );
@@ -926,6 +940,7 @@ export const WorkspaceScreen = memo(function WorkspaceScreen({
   workspaceId,
   isRouteFocused,
   recoveryRequested,
+  recoveryAgentId,
 }: WorkspaceScreenProps) {
   const navigationFocused = useIsFocused();
   return (
@@ -934,6 +949,7 @@ export const WorkspaceScreen = memo(function WorkspaceScreen({
       workspaceId={workspaceId}
       isRouteFocused={isRouteFocused ?? navigationFocused}
       recoveryRequested={recoveryRequested ?? false}
+      recoveryAgentId={recoveryAgentId ?? null}
     />
   );
 });
@@ -1729,6 +1745,7 @@ function WorkspaceScreenContent({
   workspaceId,
   isRouteFocused,
   recoveryRequested,
+  recoveryAgentId,
 }: WorkspaceScreenContentProps) {
   const { t } = useTranslation();
   const _insets = useSafeAreaInsets();
@@ -1805,6 +1822,7 @@ function WorkspaceScreenContent({
   const workspaceRecovery = useWorkspaceRecovery({
     serverId: normalizedServerId,
     workspaceId: normalizedWorkspaceId,
+    agentId: recoveryAgentId,
     enabled: shouldInspectWorkspaceRecovery(
       hasHydratedWorkspaces,
       workspaceDescriptor,
@@ -2522,6 +2540,7 @@ function WorkspaceScreenContent({
       terminal: t("workspace.tabs.fallback.terminal"),
       browser: t("workspace.tabs.fallback.browser"),
       agent: t("workspace.tabs.fallback.agent"),
+      changes: t("panels.diff.changesLabel"),
     }),
     [t],
   );
