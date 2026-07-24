@@ -24,7 +24,6 @@ import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { SidebarCallout } from "@/components/sidebar-callout";
 import { Composer } from "@/composer";
-import { AgentModeControl } from "@/composer/agent-controls/mode-control";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
 import { getProviderIcon } from "@/components/provider-icons";
 import {
@@ -1544,19 +1543,6 @@ function ActiveAgentComposer({
     [insets.bottom, composerKeyboardStyle],
   );
 
-  const composerFooter = useMemo(
-    () =>
-      isCompactComposerLayout ? (
-        <AgentModeControl
-          serverId={serverId}
-          agentId={agentId}
-          placement="footer"
-          isCompactLayout={isCompactComposerLayout}
-        />
-      ) : undefined,
-    [isCompactComposerLayout, serverId, agentId],
-  );
-
   return (
     <ReanimatedAnimated.View style={inputAreaStyle} onLayout={onInputAreaLayout}>
       <SubagentsTrack
@@ -1591,7 +1577,6 @@ function ActiveAgentComposer({
         onComposerHeightChange={onComposerHeightChange}
         onMessageSent={onMessageSent}
         onClientSlashCommand={handleClientSlashCommand}
-        footer={composerFooter}
         isCompactLayout={isCompactComposerLayout}
       />
     </ReanimatedAnimated.View>

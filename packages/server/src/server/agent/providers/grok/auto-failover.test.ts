@@ -323,7 +323,9 @@ describe("Grok automatic account recovery", () => {
     });
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
-    const started = await session.startTurn("finish the migration", { clientMessageId: "message-1" });
+    const started = await session.startTurn("finish the migration", {
+      clientMessageId: "message-1",
+    });
     await sourceStarted.promise;
 
     source.fail("Internal error: API error: Grok Build usage balance exhausted", {

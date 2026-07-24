@@ -32,7 +32,14 @@ describe("needsChineseTranslation", () => {
 
 describe("parseGoogleTranslateResponse", () => {
   it("joins segments", () => {
-    expect(parseGoogleTranslateResponse([[["你好", "hi"], ["。", "."]]])).toBe("你好。");
+    expect(
+      parseGoogleTranslateResponse([
+        [
+          ["你好", "hi"],
+          ["。", "."],
+        ],
+      ]),
+    ).toBe("你好。");
   });
 });
 

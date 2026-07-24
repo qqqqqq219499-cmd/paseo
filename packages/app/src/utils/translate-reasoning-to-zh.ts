@@ -31,9 +31,7 @@ async function translateChunkMyMemory(
   signal?: AbortSignal,
 ): Promise<string | null> {
   const url =
-    "https://api.mymemory.translated.net/get?q=" +
-    encodeURIComponent(chunk) +
-    "&langpair=en|zh-CN";
+    "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(chunk) + "&langpair=en|zh-CN";
   const response = await fetchImpl(url, { method: "GET", signal });
   if (!response.ok) return null;
   const payload: unknown = await response.json();

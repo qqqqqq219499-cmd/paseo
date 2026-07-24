@@ -50,15 +50,16 @@ export function useTranslatedReasoning(
     setStatus("loading");
     void translateReasoningToZh(text, { signal: controller.signal }).then((result) => {
       if (controller.signal.aborted) {
-        return;
+        return undefined;
       }
       if (result === text) {
         setStatus("error");
         setTranslated(null);
-        return;
+        return undefined;
       }
       setTranslated(result);
       setStatus("done");
+      return undefined;
     });
 
     return () => {
@@ -67,8 +68,7 @@ export function useTranslatedReasoning(
   }, [text, options.enabled, options.ready]);
 
   const isTranslated = translated !== null && translated !== text;
-  const displayText =
-    isTranslated && !showingOriginal ? (translated as string) : text;
+  const displayText = isTranslated && !showingOriginal ? (translated as string) : text;
 
   return {
     displayText,

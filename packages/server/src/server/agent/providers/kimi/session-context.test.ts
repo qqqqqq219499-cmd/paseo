@@ -12,7 +12,10 @@ import {
   resolveKimiContextUsageFromDisk,
 } from "./session-context.js";
 
-function usageRecordLine(model: string, total: { other: number; output: number; cacheRead: number; cacheCreate: number }): string {
+function usageRecordLine(
+  model: string,
+  total: { other: number; output: number; cacheRead: number; cacheCreate: number },
+): string {
   return (
     JSON.stringify({
       type: "usage.record",
@@ -29,7 +32,11 @@ function usageRecordLine(model: string, total: { other: number; output: number; 
   );
 }
 
-function makeSessionDir(root: string, sessionId: string, cwdKey = "wd_workspace_abcdef123456"): string {
+function makeSessionDir(
+  root: string,
+  sessionId: string,
+  cwdKey = "wd_workspace_abcdef123456",
+): string {
   const sessionDir = join(root, "sessions", cwdKey, sessionId);
   mkdirSync(join(sessionDir, "agents", "main"), { recursive: true });
   return sessionDir;
@@ -60,10 +67,20 @@ describe("readKimiWireUsage", () => {
       join(sessionDir, "agents", "main", "wire.jsonl"),
       JSON.stringify({ type: "metadata" }) +
         "\n" +
-        usageRecordLine("kimi-code/k3", { other: 100, output: 50, cacheRead: 1000, cacheCreate: 10 }) +
+        usageRecordLine("kimi-code/k3", {
+          other: 100,
+          output: 50,
+          cacheRead: 1000,
+          cacheCreate: 10,
+        }) +
         JSON.stringify({ type: "llm.request", model: "k3", modelAlias: "kimi-code/k3" }) +
         "\n" +
-        usageRecordLine("kimi-code/k3", { other: 200, output: 80, cacheRead: 2000, cacheCreate: 0 }),
+        usageRecordLine("kimi-code/k3", {
+          other: 200,
+          output: 80,
+          cacheRead: 2000,
+          cacheCreate: 0,
+        }),
       "utf8",
     );
 
@@ -78,8 +95,12 @@ describe("readKimiWireUsage", () => {
     const sessionDir = makeSessionDir(root, "session_b");
     writeFileSync(
       join(sessionDir, "agents", "main", "wire.jsonl"),
-      usageRecordLine("kimi-code/k3", { other: 661, output: 1109, cacheRead: 236288, cacheCreate: 0 }) +
-        usageRecordLine("kimi-code/k3", { other: 0, output: 0, cacheRead: 0, cacheCreate: 0 }),
+      usageRecordLine("kimi-code/k3", {
+        other: 661,
+        output: 1109,
+        cacheRead: 236288,
+        cacheCreate: 0,
+      }) + usageRecordLine("kimi-code/k3", { other: 0, output: 0, cacheRead: 0, cacheCreate: 0 }),
       "utf8",
     );
 
@@ -137,7 +158,12 @@ describe("resolveKimiContextUsageFromDisk", () => {
     const sessionDir = makeSessionDir(root, "session_x");
     writeFileSync(
       join(sessionDir, "agents", "main", "wire.jsonl"),
-      usageRecordLine("kimi-code/k3", { other: 661, output: 1109, cacheRead: 236288, cacheCreate: 0 }),
+      usageRecordLine("kimi-code/k3", {
+        other: 661,
+        output: 1109,
+        cacheRead: 236288,
+        cacheCreate: 0,
+      }),
       "utf8",
     );
 

@@ -555,6 +555,7 @@ export const ptBR: TranslationResources = {
         openFor: "Abrir menu de {{label}}",
         copyResumeCommand: "Copiar comando de retomada",
         copyAgentId: "Copiar ID do agente",
+        copyTerminalId: "Copiar ID do terminal",
         copyFilePath: "Copiar caminho do arquivo",
         rename: "Renomear",
         closeAbove: "Fechar abas acima",
@@ -592,6 +593,7 @@ export const ptBR: TranslationResources = {
       toasts: {
         copyFailed: "Falha ao copiar",
         agentIdCopiedLabel: "ID do agente",
+        terminalIdCopiedLabel: "ID do terminal",
         resumeCommandCopiedLabel: "comando de retomada",
         filePathCopiedLabel: "Caminho do arquivo",
         resumeIdUnavailable: "ID de retomada indisponível",
@@ -877,6 +879,7 @@ export const ptBR: TranslationResources = {
         commits: {
           title: "Commits",
           countLabel: "{{count}} commits do espaço de trabalho",
+          noneAhead: "Ainda não há commits à frente de {{baseRef}}",
           fileDiffEmpty: "Nenhuma alteração para exibir",
           fileDiffError: "Falha ao carregar diff do arquivo",
           loading: "Carregando commits…",

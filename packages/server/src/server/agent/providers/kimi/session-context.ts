@@ -1,4 +1,12 @@
-import { closeSync, existsSync, openSync, readFileSync, readdirSync, readSync, statSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  readSync,
+  statSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { SessionNotification } from "@agentclientprotocol/sdk";
@@ -124,7 +132,7 @@ export function readKimiWireUsage(sessionDir: string): KimiWireUsage | null {
   // scanning from the end makes that harmless.
   for (let index = lines.length - 1; index >= 0 && contextTokensUsed === null; index--) {
     const line = lines[index]!.trim();
-    if (!line.includes("\"usage.record\"")) {
+    if (!line.includes('"usage.record"')) {
       continue;
     }
     try {
@@ -197,7 +205,8 @@ export function resolveKimiContextUsageFromDisk(input: {
     return undefined;
   }
 
-  const kimiHome = input.kimiHome ?? resolveKimiHome(input.env ?? process.env, input.homedirFn ?? homedir);
+  const kimiHome =
+    input.kimiHome ?? resolveKimiHome(input.env ?? process.env, input.homedirFn ?? homedir);
   const sessionDir = findKimiSessionDir(kimiHome, sessionId);
   if (!sessionDir) {
     return undefined;
@@ -208,9 +217,7 @@ export function resolveKimiContextUsageFromDisk(input: {
     return undefined;
   }
 
-  const maxTokens = wire.modelAlias
-    ? readKimiModelContextWindow(kimiHome, wire.modelAlias)
-    : null;
+  const maxTokens = wire.modelAlias ? readKimiModelContextWindow(kimiHome, wire.modelAlias) : null;
   if (maxTokens === null) {
     return undefined;
   }
@@ -250,7 +257,8 @@ export function createKimiContextUsageResolver(
         return undefined;
       }
       const kimiHome =
-        options.kimiHome ?? resolveKimiHome(options.env ?? process.env, options.homedirFn ?? homedir);
+        options.kimiHome ??
+        resolveKimiHome(options.env ?? process.env, options.homedirFn ?? homedir);
       const sessionDir = findKimiSessionDir(kimiHome, sessionId);
       if (!sessionDir) {
         return undefined;
@@ -267,11 +275,7 @@ export function createKimiContextUsageResolver(
       // when the file actually grew past our last read and the throttle
       // interval elapsed. Usage records land once per LLM step, so the ring
       // still tracks consumption promptly.
-      if (
-        cached &&
-        cached.mtimeMs === stat.mtimeMs &&
-        cached.sizeBytes === stat.size
-      ) {
+      if (cached && cached.mtimeMs === stat.mtimeMs && cached.sizeBytes === stat.size) {
         return undefined;
       }
       if (cached && now() - cached.readAt < MIN_READ_INTERVAL_MS) {

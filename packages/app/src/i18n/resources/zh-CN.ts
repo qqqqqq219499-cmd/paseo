@@ -551,6 +551,7 @@ export const zhCN: TranslationResources = {
         openFor: "打开 {{label}} 的菜单",
         copyResumeCommand: "复制恢复命令",
         copyAgentId: "复制 Agent ID",
+        copyTerminalId: "复制 Terminal ID",
         copyFilePath: "Copy file path",
         rename: "重命名",
         closeAbove: "关闭上方标签",
@@ -588,6 +589,7 @@ export const zhCN: TranslationResources = {
       toasts: {
         copyFailed: "复制失败",
         agentIdCopiedLabel: "Agent ID",
+        terminalIdCopiedLabel: "Terminal ID",
         resumeCommandCopiedLabel: "恢复命令",
         filePathCopiedLabel: "File path",
         resumeIdUnavailable: "恢复 ID 不可用",
@@ -847,6 +849,7 @@ export const zhCN: TranslationResources = {
         commits: {
           title: "提交",
           countLabel: "{{count}} 个工作区提交",
+          noneAhead: "尚无领先于 {{baseRef}} 的提交",
           fileDiffEmpty: "没有可显示的更改",
           fileDiffError: "加载文件差异失败",
           loading: "正在加载提交…",

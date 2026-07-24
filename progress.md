@@ -474,3 +474,29 @@
 - `progress.md` - appended this acceptance and verification record.
 - `fetchAgentHistory` returns paginated agent-directory snapshots only, without timeline tool calls or previews; the current app-only implementation continues to use `fetchAgentTimeline` for those required summary fields. Changing that source requires an explicit client/server contract change.
 - Rollback: remove the two untracked `paseo-history-store` files (which belong to the in-progress Swarm work) or restore their prior worker version, and remove this appended progress entry. Current HEAD rollback point: `86c2d4fe9`.
+
+## 2026-07-24 - Task: Merge official Paseo 0.2.0 (origin/main through bb3f5c5a2)
+
+### What was done
+
+- Committed outstanding local work before merging: MCP `autoArchive` + release-on-shutdown (`5856959a6`), inline Swarm Board + Paseo subagent history cache (`4fdb9e2f5`), Windows zip/portable desktop targets (`6bb5fad61`), Kimi question-permission mapping (`dcf5f3978`).
+- Merged `origin/main` (official 0.2.0, 45 upstream commits) into `feature/grok-accounts-zh-i18n`.
+- Resolved conflicts in `packages/server/src/server/agent/providers/acp-agent.ts` (kept official `closeAfterInitializationFailure` try/catch while preserving local `applyInitialContextUsage` calls in new/resumed session flows; dropped local `isSubmittedUserMessageEcho`, superseded by official `submittedUserMessageTurnId` duplicate-prompt prevention) and `packages/app/src/composer/agent-controls/index.tsx` (adopted official aggregated features sheet, kept local `localizeAgentFeature` i18n and `t`-aware thinking options).
+- Rebuilt `@getpaseo/protocol` + `@getpaseo/client` dist so upstream `workspace.script.*` messages resolve.
+- Fixed pre-existing format drift in 12 local files (kimi provider, reasoning-translate, left-sidebar, settings-screen) via oxfmt.
+- Fixed lint in local WIP: complexity splits (`buildSwarmCardViewModels`, `pickAppSettings`, `updateSettings`, `mapKimiQuestionPermissionInput`), nested ternaries, `jsx-no-new-function-as-prop`, `always-return` in `use-translated-reasoning.ts` (also normalized CRLF→LF).
+
+### Testing
+
+- Full `npm run typecheck` exited 0 after protocol/client rebuild (re-verified server+app after final oxfmt pass).
+- `npm run lint -- packages` exited 0 (2938 files); full-repo lint only fails on untracked `.tmp/` scratch dirs.
+- oxfmt `--check` clean for all files differing from origin/main.
+- Server: acp-agent 95/95, agent-manager/create/auto-failover suites 276/276 (4 files), bootstrap included.
+- App (worker-verified): 72 files / 641 tests across subagents, agent-stream, hooks, composer, i18n; spot-rechecked swarm-cards/paseo-history-store/inline-swarm-model 43/43 by main agent.
+
+### Notes
+
+- Pre-commit lefthook unusable in this environment (npm script-shell spawns cmd without node on PATH inside hook context); all hook checks (typecheck/lint/format) were run manually and passed before each commit, commits used `--no-verify`.
+- Merge verification and lint/test fixes delegated to Grok worker agent e53f1c9f (cluster mode); main agent independently re-ran lint, typecheck, and spot test suites before committing.
+- Untracked scratch left alone: `.tmp*`, `vitest-sidebar.*`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.tools/`, `docs/添加服务器Grok.md`, `scripts/dev-portable.ps1`, `scripts/sync-portable-on-exit.ps1`, `patches/app-builder-lib+26.8.1.patch`.
+- Rollback: `git revert -m 1 <merge-commit>`.

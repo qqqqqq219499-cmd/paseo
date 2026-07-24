@@ -124,8 +124,7 @@ export function readKimiModelEffortSupport(
   let hasThinkingCapability = efforts.length > 0;
   if (capsMatch) {
     hasThinkingCapability =
-      hasThinkingCapability ||
-      /"thinking"|"always_thinking"/.test(capsMatch[1] ?? "");
+      hasThinkingCapability || /"thinking"|"always_thinking"/.test(capsMatch[1] ?? "");
   }
 
   return {
@@ -170,7 +169,11 @@ export function writeKimiThinkingEffort(kimiHome: string, effort: string): void 
     nextSection = `${section.replace(/\s*$/, "")}\neffort = "${effort}"\n`;
   }
 
-  writeFileSync(configPath, toml.slice(0, bodyStart) + nextSection + toml.slice(sectionEnd), "utf8");
+  writeFileSync(
+    configPath,
+    toml.slice(0, bodyStart) + nextSection + toml.slice(sectionEnd),
+    "utf8",
+  );
 }
 
 function currentModelAlias(configOptions: SessionConfigOption[]): string | null {
@@ -215,7 +218,9 @@ export function enrichKimiConfigOptions(
       const efforts = support.supportEfforts;
       const preferred =
         (thinking.effort && efforts.includes(thinking.effort) && thinking.effort) ||
-        (support.defaultEffort && efforts.includes(support.defaultEffort) && support.defaultEffort) ||
+        (support.defaultEffort &&
+          efforts.includes(support.defaultEffort) &&
+          support.defaultEffort) ||
         efforts[0]!;
       return {
         ...entry,
@@ -236,9 +241,7 @@ export function enrichKimiConfigOptions(
     // Fixed-depth thinking models: keep on (optionally surface off if CLI listed it)
     if (support?.hasThinkingCapability) {
       const current =
-        typeof entry.currentValue === "string" && entry.currentValue
-          ? entry.currentValue
-          : "on";
+        typeof entry.currentValue === "string" && entry.currentValue ? entry.currentValue : "on";
       return {
         ...entry,
         category: "thought_level",
