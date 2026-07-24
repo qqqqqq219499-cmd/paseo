@@ -212,6 +212,28 @@ function AutoExpandReasoningRow({ value, onChange }: AutoExpandReasoningRowProps
   );
 }
 
+interface AutoTranslateReasoningRowProps {
+  value: boolean;
+  onChange: (value: boolean) => void;
+}
+
+function AutoTranslateReasoningRow({ value, onChange }: AutoTranslateReasoningRowProps) {
+  const { t } = useTranslation();
+  return (
+    <View style={settingsStyles.row}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>
+          {t("settings.general.autoTranslateReasoning.label")}
+        </Text>
+        <Text style={settingsStyles.rowHint}>
+          {t("settings.general.autoTranslateReasoning.description")}
+        </Text>
+      </View>
+      <Switch value={value} onValueChange={onChange} />
+    </View>
+  );
+}
+
 const TOOL_CALL_DETAIL_LEVELS: readonly AppSettings["toolCallDetailLevel"][] = [
   "detailed",
   "overview",
@@ -503,6 +525,13 @@ export function AppearanceSection() {
     [updateSettings],
   );
 
+  const handleAutoTranslateReasoningChange = useCallback(
+    (autoTranslateReasoning: boolean) => {
+      void updateSettings({ autoTranslateReasoning });
+    },
+    [updateSettings],
+  );
+
   const handleToolCallDetailLevelChange = useCallback(
     (toolCallDetailLevel: AppSettings["toolCallDetailLevel"]) => {
       void updateSettings({ toolCallDetailLevel });
@@ -610,6 +639,10 @@ export function AppearanceSection() {
           <AutoExpandReasoningRow
             value={settings.autoExpandReasoning}
             onChange={handleAutoExpandReasoningChange}
+          />
+          <AutoTranslateReasoningRow
+            value={settings.autoTranslateReasoning}
+            onChange={handleAutoTranslateReasoningChange}
           />
           <ToolCallDetailRow
             value={settings.toolCallDetailLevel}

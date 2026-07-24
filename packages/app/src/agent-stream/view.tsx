@@ -52,6 +52,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
 import { useSettings } from "@/hooks/use-settings";
+import { useTranslatedReasoning } from "@/hooks/use-translated-reasoning";
 import type { ToastApi } from "@/components/toast-host";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { ToolCallDetailsContent } from "@/components/tool-call-details";
@@ -87,6 +88,7 @@ import {
   type WorkspaceFileOpenRequest,
 } from "@/workspace/file-open";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
+import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { buildNewWorkspaceRoute } from "@/utils/host-routes";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { isWeb } from "@/constants/platform";
@@ -102,6 +104,9 @@ import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { toErrorMessage } from "@/utils/error-messages";
 import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submission-store";
+import { InlineSwarmBlock } from "@/subagents/inline-swarm-block";
+import { findInlineSwarmAnchorIds } from "@/subagents/inline-swarm-model";
+import type { SwarmCardViewModel } from "@/subagents/swarm-cards";
 
 function renderLiveAuxiliaryNode(input: {
   pendingPermissions: ReactNode;
@@ -243,6 +248,8 @@ export interface AgentStreamViewProps {
   isAuthoritativeHistoryReady?: boolean;
   toast?: ToastApi | null;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
+  onOpenSubagent?: (subagentId: string) => void;
+  onOpenProviderSubagent?: (parentAgentId: string, subagentId: string) => void;
   readOnly?: boolean;
   historyPagination?: {
     hasOlder: boolean;
@@ -330,6 +337,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       isAuthoritativeHistoryReady = true,
       toast,
       onOpenWorkspaceFile,
+      onOpenSubagent,
+      onOpenProviderSubagent,
       readOnly = false,
       historyPagination,
     },
@@ -338,6 +347,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const { t } = useTranslation();
     const router = useRouter();
     const autoExpandReasoning = useSettings((settings) => settings.autoExpandReasoning);
+    const autoTranslateReasoning = useSettings((settings) => settings.autoTranslateReasoning);
     const toolCallDetailLevel = useSettings((settings) => settings.toolCallDetailLevel);
     const viewportRef = useRef<StreamViewportHandle | null>(null);
     const isMobile = useIsCompactFormFactor();
@@ -601,6 +611,32 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         streamRenderStrategy,
       ],
     );
+
+    const inlineSwarmAnchorIds = useMemo(() => {
+      const items: StreamItem[] = [];
+      for (const layoutItem of streamLayout.history) {
+        items.push(layoutItem.item);
+      }
+      for (const layoutItem of streamLayout.liveHead) {
+        items.push(layoutItem.item);
+      }
+      return findInlineSwarmAnchorIds(items);
+    }, [streamLayout.history, streamLayout.liveHead]);
+
+    const handleOpenInlineSwarmCard = useCallback(
+      (card: SwarmCardViewModel) => {
+        if (card.kind === "paseo") {
+          if (onOpenSubagent) {
+            onOpenSubagent(card.subagentId);
+          } else {
+            navigateToAgent({ serverId: resolvedServerId, agentId: card.subagentId });
+          }
+          return;
+        }
+        onOpenProviderSubagent?.(card.parentAgentId, card.subagentId);
+      },
+      [onOpenProviderSubagent, onOpenSubagent, resolvedServerId],
+    );
     useImperativeHandle(
       ref,
       () => ({
@@ -696,19 +732,16 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const renderThoughtItem = useCallback(
       (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "thought" }>) => {
         return (
-          <ToolCallSlot
-            itemId={item.id}
-            onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
-            toolName="thinking"
-            args={item.text}
-            status={item.status === "ready" ? "completed" : "executing"}
-            isLastInSequence={layoutItem.isLastInToolSequence}
-            defaultExpanded={autoExpandReasoning}
-            forceInline={autoExpandReasoning}
+          <TranslatedThoughtSlot
+            item={item}
+            layoutItem={layoutItem}
+            autoExpandReasoning={autoExpandReasoning}
+            autoTranslateReasoning={autoTranslateReasoning}
+            setInlineDetailsExpanded={setInlineDetailsExpanded}
           />
         );
       },
-      [autoExpandReasoning, setInlineDetailsExpanded],
+      [autoExpandReasoning, autoTranslateReasoning, setInlineDetailsExpanded],
     );
 
     const renderSingleToolCallItem = useCallback(
@@ -817,8 +850,22 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           case "thought":
             return renderThoughtItem(layoutItem, item);
 
-          case "tool_call":
-            return renderToolCallItem(layoutItem, item);
+          case "tool_call": {
+            const toolCallContent = renderToolCallItem(layoutItem, item);
+            if (!inlineSwarmAnchorIds.has(item.id)) {
+              return toolCallContent;
+            }
+            return (
+              <>
+                {toolCallContent}
+                <InlineSwarmBlock
+                  serverId={resolvedServerId}
+                  parentAgentId={agentId}
+                  onOpenCard={handleOpenInlineSwarmCard}
+                />
+              </>
+            );
+          }
 
           case "activity_log":
             return (
@@ -846,7 +893,16 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             return null;
         }
       },
-      [renderUserMessageItem, renderAssistantMessageItem, renderThoughtItem, renderToolCallItem],
+      [
+        agentId,
+        handleOpenInlineSwarmCard,
+        inlineSwarmAnchorIds,
+        renderUserMessageItem,
+        renderAssistantMessageItem,
+        renderThoughtItem,
+        renderToolCallItem,
+        resolvedServerId,
+      ],
     );
 
     const bottomTurnFooterHost = streamLayout.auxiliaryTurnFooter;
@@ -1163,6 +1219,10 @@ function agentStreamViewPropsEqual(
   }
   if (left.toast !== right.toast) reasons.push("toast");
   if (left.onOpenWorkspaceFile !== right.onOpenWorkspaceFile) reasons.push("onOpenWorkspaceFile");
+  if (left.onOpenSubagent !== right.onOpenSubagent) reasons.push("onOpenSubagent");
+  if (left.onOpenProviderSubagent !== right.onOpenProviderSubagent) {
+    reasons.push("onOpenProviderSubagent");
+  }
   if (left.readOnly !== right.readOnly) reasons.push("readOnly");
   if (!historyPaginationPropsEqual(left.historyPagination, right.historyPagination)) {
     reasons.push("historyPagination");
@@ -1174,6 +1234,96 @@ function agentStreamViewPropsEqual(
 export const AgentStreamView = memo(AgentStreamViewComponent, agentStreamViewPropsEqual);
 AgentStreamView.displayName = "AgentStreamView";
 
+interface TranslatedThoughtSlotProps {
+  item: Extract<StreamItem, { kind: "thought" }>;
+  layoutItem: StreamLayoutItem;
+  autoExpandReasoning: boolean;
+  autoTranslateReasoning: boolean;
+  setInlineDetailsExpanded: (itemId: string, expanded: boolean) => void;
+}
+
+function TranslatedThoughtSlot({
+  item,
+  layoutItem,
+  autoExpandReasoning,
+  autoTranslateReasoning,
+  setInlineDetailsExpanded,
+}: TranslatedThoughtSlotProps) {
+  const { t } = useTranslation();
+  const ready = item.status === "ready";
+  const translation = useTranslatedReasoning(item.text, {
+    enabled: autoTranslateReasoning,
+    ready,
+  });
+
+  let statusLabel: string | null = null;
+  if (translation.status === "loading") {
+    statusLabel = t("settings.general.autoTranslateReasoning.translating", {
+      defaultValue: "Translating thinking…",
+    });
+  } else if (translation.isTranslated) {
+    statusLabel = t("settings.general.autoTranslateReasoning.translatedBadge", {
+      defaultValue: "Chinese translation",
+    });
+  }
+
+  const handleToggleShowingOriginal = useCallback(() => {
+    translation.setShowingOriginal(!translation.showingOriginal);
+  }, [translation]);
+
+  return (
+    <View>
+      <ToolCallSlot
+        itemId={item.id}
+        onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
+        toolName="thinking"
+        args={translation.displayText}
+        status={ready ? "completed" : "executing"}
+        isLastInSequence={layoutItem.isLastInToolSequence}
+        defaultExpanded={autoExpandReasoning}
+        forceInline={autoExpandReasoning}
+      />
+      {translation.isTranslated || translation.status === "loading" ? (
+        <View style={thoughtTranslateStyles.row}>
+          {statusLabel ? <Text style={thoughtTranslateStyles.hint}>{statusLabel}</Text> : null}
+          {translation.isTranslated ? (
+            <Pressable onPress={handleToggleShowingOriginal} accessibilityRole="button">
+              <Text style={thoughtTranslateStyles.toggle}>
+                {translation.showingOriginal
+                  ? t("settings.general.autoTranslateReasoning.showTranslation", {
+                      defaultValue: "Show Chinese",
+                    })
+                  : t("settings.general.autoTranslateReasoning.showOriginal", {
+                      defaultValue: "Show original",
+                    })}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const thoughtTranslateStyles = StyleSheet.create((theme) => ({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingBottom: 6,
+    marginTop: -4,
+  },
+  hint: {
+    color: theme.colors.foregroundMuted,
+    fontSize: 12,
+  },
+  toggle: {
+    color: theme.colors.accent,
+    fontSize: 12,
+  },
+}));
 interface ToolCallSlotProps extends Omit<
   ComponentProps<typeof ToolCall>,
   "onInlineDetailsExpandedChange"

@@ -1560,6 +1560,10 @@ export const ptBR: TranslationResources = {
     title: "Painel Swarm",
     openAction: "Abrir painel Swarm",
     openTooltip: "Ver todos os subagentes como cartões ao vivo",
+    showListAction: "Show list",
+    showListTooltip: "Switch to the compact subagent list inside this session",
+    showBoardAction: "Show board",
+    showBoardTooltip: "Show live subagent cards inside this session",
     empty: "Ainda não há subagentes",
     toolCalls: "{{count}} chamadas de ferramentas",
     status: {
@@ -1568,7 +1572,16 @@ export const ptBR: TranslationResources = {
       failed: "Falhou",
       canceled: "Cancelado",
     },
+    displayState: {
+      queued: "Queued",
+      working: "Working",
+      waiting: "Waiting",
+      completed: "Completed",
+      failed: "Failed",
+      canceled: "Canceled",
+    },
     lastActivityNone: "Ainda não há atividade",
+    inlineHeader: "{{count}} helpers | {{title}}",
   },
   panels: {
     draft: {

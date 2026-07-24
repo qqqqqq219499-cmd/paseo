@@ -46,6 +46,8 @@ export interface AppSettings {
   workspaceTitleSource: WorkspaceTitleSource;
   newThemeEnabled: boolean; // standalone redesigned "new theme", independent of `theme`
   autoExpandReasoning: boolean;
+  /** Display-only: translate Latin-script reasoning blocks to Simplified Chinese. */
+  autoTranslateReasoning: boolean;
   toolCallDetailLevel: ToolCallDetailLevel;
   vimKeybindings: boolean;
 }
@@ -71,6 +73,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   workspaceTitleSource: "title",
   newThemeEnabled: DEFAULT_NEW_THEME_ENABLED,
   autoExpandReasoning: false,
+  autoTranslateReasoning: true,
   toolCallDetailLevel: "detailed",
   vimKeybindings: false,
 };
@@ -193,28 +196,8 @@ function parseToolCallDetailLevel(stored: StoredAppSettings): ToolCallDetailLeve
   return null;
 }
 
-function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
+function pickFontAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   const result: Partial<AppSettings> = {};
-  if (typeof stored.theme === "string" && VALID_THEMES.has(stored.theme)) {
-    result.theme = stored.theme;
-  }
-  const language = parseAppLanguage(stored.language);
-  if (language !== null) {
-    result.language = language;
-  }
-  if (stored.sendBehavior === "interrupt" || stored.sendBehavior === "queue") {
-    result.sendBehavior = stored.sendBehavior;
-  }
-  if (
-    typeof stored.serviceUrlBehavior === "string" &&
-    VALID_SERVICE_URL_BEHAVIORS.has(stored.serviceUrlBehavior)
-  ) {
-    result.serviceUrlBehavior = stored.serviceUrlBehavior;
-  }
-  const terminalScrollbackLines = parseTerminalScrollbackLines(stored.terminalScrollbackLines);
-  if (terminalScrollbackLines !== null) {
-    result.terminalScrollbackLines = terminalScrollbackLines;
-  }
   const uiFontFamily = sanitizeFontFamily(stored.uiFontFamily);
   if (uiFontFamily !== null) {
     result.uiFontFamily = uiFontFamily;
@@ -240,6 +223,31 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   if (typeof stored.syntaxTheme === "string" && isSyntaxThemeId(stored.syntaxTheme)) {
     result.syntaxTheme = stored.syntaxTheme;
   }
+  return result;
+}
+
+function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
+  const result: Partial<AppSettings> = pickFontAppSettings(stored);
+  if (typeof stored.theme === "string" && VALID_THEMES.has(stored.theme)) {
+    result.theme = stored.theme;
+  }
+  const language = parseAppLanguage(stored.language);
+  if (language !== null) {
+    result.language = language;
+  }
+  if (stored.sendBehavior === "interrupt" || stored.sendBehavior === "queue") {
+    result.sendBehavior = stored.sendBehavior;
+  }
+  if (
+    typeof stored.serviceUrlBehavior === "string" &&
+    VALID_SERVICE_URL_BEHAVIORS.has(stored.serviceUrlBehavior)
+  ) {
+    result.serviceUrlBehavior = stored.serviceUrlBehavior;
+  }
+  const terminalScrollbackLines = parseTerminalScrollbackLines(stored.terminalScrollbackLines);
+  if (terminalScrollbackLines !== null) {
+    result.terminalScrollbackLines = terminalScrollbackLines;
+  }
   if (typeof stored.vimKeybindings === "boolean") {
     result.vimKeybindings = stored.vimKeybindings;
   }
@@ -256,6 +264,9 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   }
   if (typeof stored.autoExpandReasoning === "boolean") {
     result.autoExpandReasoning = stored.autoExpandReasoning;
+  }
+  if (typeof stored.autoTranslateReasoning === "boolean") {
+    result.autoTranslateReasoning = stored.autoTranslateReasoning;
   }
   const toolCallDetailLevel = parseToolCallDetailLevel(stored);
   if (toolCallDetailLevel !== null) {

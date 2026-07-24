@@ -1315,6 +1315,19 @@ const AgentStreamSection = memo(function AgentStreamSection({
     }
     return new Map(pendingPermissionList.map((permission) => [permission.key, permission]));
   }, [pendingPermissionList]);
+  const { openTab } = usePaneContext();
+  const handleOpenSubagent = useCallback(
+    (subagentId: string) => {
+      navigateToAgent({ serverId, agentId: subagentId });
+    },
+    [serverId],
+  );
+  const handleOpenProviderSubagent = useCallback(
+    (parentAgentId: string, subagentId: string) => {
+      openTab({ kind: "provider_subagent", parentAgentId, subagentId });
+    },
+    [openTab],
+  );
 
   return (
     <AgentStreamView
@@ -1328,6 +1341,8 @@ const AgentStreamSection = memo(function AgentStreamSection({
       isAuthoritativeHistoryReady={hasAppliedAuthoritativeHistory}
       toast={toast}
       onOpenWorkspaceFile={onOpenWorkspaceFile}
+      onOpenSubagent={handleOpenSubagent}
+      onOpenProviderSubagent={handleOpenProviderSubagent}
     />
   );
 });
@@ -1439,9 +1454,6 @@ function ActiveAgentComposer({
     },
     [openTab],
   );
-  const handleOpenSwarmBoard = useCallback(() => {
-    openTab({ kind: "swarm_board", parentAgentId: agentId });
-  }, [agentId, openTab]);
   const handleArchiveSubagent = useArchiveSubagent({ serverId });
   const handleDetachSubagent = useDetachSubagent({ serverId });
   const handleHideFinishedProviderSubagents = useHideFinishedProviderSubagents({
@@ -1549,12 +1561,13 @@ function ActiveAgentComposer({
     <ReanimatedAnimated.View style={inputAreaStyle} onLayout={onInputAreaLayout}>
       <SubagentsTrack
         rows={subagentRows}
+        serverId={serverId}
+        parentAgentId={agentId}
         onOpenSubagent={handleOpenSubagent}
         onOpenProviderSubagent={handleOpenProviderSubagent}
         onArchiveSubagent={handleArchiveSubagent}
         onArchiveFinished={handleHideFinishedProviderSubagents}
         onDetachSubagent={canDetachSubagents ? handleDetachSubagent : undefined}
-        onOpenSwarmBoard={handleOpenSwarmBoard}
       />
       <Composer
         agentId={agentId}

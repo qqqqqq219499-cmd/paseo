@@ -1531,6 +1531,10 @@ export const ar: TranslationResources = {
     title: "لوحة Swarm",
     openAction: "فتح لوحة Swarm",
     openTooltip: "عرض جميع الوكلاء الفرعيين كبطاقات مباشرة",
+    showListAction: "Show list",
+    showListTooltip: "Switch to the compact subagent list inside this session",
+    showBoardAction: "Show board",
+    showBoardTooltip: "Show live subagent cards inside this session",
     empty: "لا يوجد وكلاء فرعيون بعد",
     toolCalls: "{{count}} من استدعاءات الأدوات",
     status: {
@@ -1539,7 +1543,16 @@ export const ar: TranslationResources = {
       failed: "فشل",
       canceled: "تم الإلغاء",
     },
+    displayState: {
+      queued: "Queued",
+      working: "Working",
+      waiting: "Waiting",
+      completed: "Completed",
+      failed: "Failed",
+      canceled: "Canceled",
+    },
     lastActivityNone: "لا يوجد نشاط بعد",
+    inlineHeader: "{{count}} helpers | {{title}}",
   },
   panels: {
     draft: {

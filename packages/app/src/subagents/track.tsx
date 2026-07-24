@@ -13,6 +13,8 @@ import {
 } from "@/screens/workspace/workspace-tab-presentation";
 import type { Theme } from "@/styles/theme";
 import type { SubagentRow } from "./select";
+import { SwarmBoardView } from "@/subagents/swarm-board-view";
+import type { SwarmCardViewModel } from "@/subagents/swarm-cards";
 import {
   buildSubagentRowPresentationData,
   countFinishedSubagents,
@@ -32,13 +34,16 @@ const foregroundMutedColorMapping = (theme: Theme) => ({
 
 export interface SubagentsTrackProps {
   rows: SubagentRow[];
+  serverId: string;
+  parentAgentId: string;
   onOpenSubagent: (id: string) => void;
   onOpenProviderSubagent: (parentAgentId: string, subagentId: string) => void;
   onArchiveSubagent: (id: string) => void;
   onArchiveFinished?: () => void;
   onDetachSubagent?: (id: string) => void;
-  onOpenSwarmBoard?: () => void;
 }
+
+type SubagentsTrackViewMode = "board" | "list";
 
 const SUBAGENTS_LIST_MAX_HEIGHT = 200;
 
@@ -54,19 +59,39 @@ function buildRowPresentation(row: SubagentRow): WorkspaceTabPresentation {
 
 export function SubagentsTrack({
   rows,
+  serverId,
+  parentAgentId,
   onOpenSubagent,
   onOpenProviderSubagent,
   onArchiveSubagent,
   onArchiveFinished,
   onDetachSubagent,
-  onOpenSwarmBoard,
 }: SubagentsTrackProps): ReactElement | null {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  // Default expanded so multi-agent cards live inside the parent session
+  // (composer stack), not behind a separate workspace tab switch.
+  const [expanded, setExpanded] = useState(true);
+  const [viewMode, setViewMode] = useState<SubagentsTrackViewMode>("board");
 
   const toggleExpanded = useCallback(() => {
     setExpanded((current) => !current);
   }, []);
+
+  const toggleViewMode = useCallback(() => {
+    setViewMode((current) => (current === "board" ? "list" : "board"));
+    setExpanded(true);
+  }, []);
+
+  const handleOpenSwarmCard = useCallback(
+    (card: SwarmCardViewModel) => {
+      if (card.kind === "paseo") {
+        onOpenSubagent(card.subagentId);
+      } else {
+        onOpenProviderSubagent(card.parentAgentId, card.subagentId);
+      }
+    },
+    [onOpenSubagent, onOpenProviderSubagent],
+  );
 
   const surfaceStyle = useMemo(
     () => [styles.surface, expanded && styles.surfaceExpanded],
@@ -91,6 +116,13 @@ export function SubagentsTrack({
 
   const headerLabel = formatHeaderLabel(rows);
   const finishedCount = countFinishedSubagents(rows);
+  const boardMode = viewMode === "board";
+  const viewToggleLabel = boardMode
+    ? t("swarmBoard.showListAction")
+    : t("swarmBoard.showBoardAction");
+  const viewToggleTooltip = boardMode
+    ? t("swarmBoard.showListTooltip")
+    : t("swarmBoard.showBoardTooltip");
 
   return (
     <View style={styles.outer} testID="subagents-track">
@@ -113,18 +145,16 @@ export function SubagentsTrack({
                 {headerLabel}
               </Text>
             </Pressable>
-            {onOpenSwarmBoard ? (
-              <View style={styles.headerAction}>
-                <SubagentActionButton
-                  accessibilityLabel={t("swarmBoard.openAction")}
-                  testID="subagents-track-open-swarm-board"
-                  tooltipLabel={t("swarmBoard.openTooltip")}
-                  icon="grid"
-                  visible
-                  onPress={onOpenSwarmBoard}
-                />
-              </View>
-            ) : null}
+            <View style={styles.headerAction}>
+              <SubagentActionButton
+                accessibilityLabel={viewToggleLabel}
+                testID="subagents-track-toggle-swarm-view"
+                tooltipLabel={viewToggleTooltip}
+                icon="grid"
+                visible
+                onPress={toggleViewMode}
+              />
+            </View>
             {finishedCount > 0 && onArchiveFinished ? (
               <View style={styles.headerAction}>
                 <SubagentActionButton
@@ -138,7 +168,15 @@ export function SubagentsTrack({
               </View>
             ) : null}
           </View>
-          {expanded ? (
+          {expanded && boardMode ? (
+            <SwarmBoardView
+              serverId={serverId}
+              parentAgentId={parentAgentId}
+              variant="inline"
+              onOpenCard={handleOpenSwarmCard}
+            />
+          ) : null}
+          {expanded && !boardMode ? (
             <ScrollView
               style={styles.scroll}
               contentContainerStyle={styles.scrollContent}

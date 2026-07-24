@@ -1542,6 +1542,10 @@ export const en = {
     title: "Swarm Board",
     openAction: "Open swarm board",
     openTooltip: "View all subagents as live cards",
+    showListAction: "Show list",
+    showListTooltip: "Switch to the compact subagent list inside this session",
+    showBoardAction: "Show board",
+    showBoardTooltip: "Show live subagent cards inside this session",
     empty: "No subagents yet",
     toolCalls: "{{count}} tool calls",
     status: {
@@ -1550,7 +1554,16 @@ export const en = {
       failed: "Failed",
       canceled: "Canceled",
     },
+    displayState: {
+      queued: "Queued",
+      working: "Working",
+      waiting: "Waiting",
+      completed: "Completed",
+      failed: "Failed",
+      canceled: "Canceled",
+    },
     lastActivityNone: "No activity yet",
+    inlineHeader: "{{count}} helpers | {{title}}",
   },
   panels: {
     draft: {

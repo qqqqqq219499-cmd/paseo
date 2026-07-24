@@ -1,18 +1,32 @@
 import type { AgentTimelineItem } from "@getpaseo/protocol/agent-types";
+import type { AgentLifecycleStatus } from "@getpaseo/protocol/agent-lifecycle";
 import type { ProviderSubagentDescriptorPayload } from "@getpaseo/protocol/messages";
+import type { Agent } from "@/stores/session-store";
+import type { StreamItem } from "@/types/stream";
 import { providerSubagentKey } from "@/subagents/provider-store";
 import type { ProviderSubagentTimelineState } from "@/subagents/provider-store";
+import type { PaseoSubagentHistoryEntry } from "@/subagents/paseo-history-store";
 
 export type SwarmCardStatus = "running" | "completed" | "failed" | "canceled";
 
+export type SwarmCardDisplayState =
+  | "queued"
+  | "working"
+  | "waiting"
+  | "completed"
+  | "failed"
+  | "canceled";
+
 export interface SwarmCardViewModel {
   key: string;
+  kind: "paseo" | "provider";
   subagentId: string;
   parentAgentId: string;
   provider: ProviderSubagentDescriptorPayload["provider"];
   title: string;
   description: string | null;
   status: SwarmCardStatus;
+  displayState: SwarmCardDisplayState;
   toolCallCount: number;
   lastActivityPreview: string | null;
   createdAt: string;
@@ -31,11 +45,11 @@ export interface SwarmSummary {
 const FALLBACK_TITLE = "Subagent";
 const PREVIEW_MAX_LENGTH = 80;
 
-function collapseWhitespace(text: string): string {
+export function collapseWhitespace(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-function truncatePreview(text: string): string {
+export function truncatePreview(text: string): string {
   if (text.length <= PREVIEW_MAX_LENGTH) {
     return text;
   }
@@ -55,6 +69,51 @@ function activityPreviewText(item: AgentTimelineItem): string | null {
     default:
       return null;
   }
+}
+
+function streamItemPreviewText(item: StreamItem): string | null {
+  switch (item.kind) {
+    case "assistant_message":
+    case "thought":
+      return collapseWhitespace(item.text);
+    case "tool_call": {
+      const name =
+        item.payload.source === "agent" ? item.payload.data.name : item.payload.data.toolName;
+      return collapseWhitespace(name);
+    }
+    case "activity_log":
+      return collapseWhitespace(item.message);
+    default:
+      return null;
+  }
+}
+
+export function lastStreamActivityPreview(tail: StreamItem[] | undefined): string | null {
+  if (!tail || tail.length === 0) {
+    return null;
+  }
+  for (let i = tail.length - 1; i >= 0; i -= 1) {
+    const item = tail[i];
+    if (!item) continue;
+    const text = streamItemPreviewText(item);
+    if (text) {
+      return truncatePreview(text);
+    }
+  }
+  return null;
+}
+
+function countStreamToolCalls(tail: StreamItem[] | undefined): number | undefined {
+  if (!tail || tail.length === 0) {
+    return undefined;
+  }
+  let count = 0;
+  for (const item of tail) {
+    if (item.kind === "tool_call") {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 function countToolCalls(timeline: ProviderSubagentTimelineState | undefined): number {
@@ -123,12 +182,126 @@ function compareSwarmCards(left: SwarmCardViewModel, right: SwarmCardViewModel):
   return compareStrings(right.updatedAt, left.updatedAt) || compareStrings(left.key, right.key);
 }
 
-export function buildSwarmCardViewModels(input: {
+function isTerminalLifecycle(status: AgentLifecycleStatus): boolean {
+  return status === "idle" || status === "error" || status === "closed";
+}
+
+function paseoAgentNeedsPermission(agent: Agent): boolean {
+  if (agent.pendingPermissions.length > 0) {
+    return true;
+  }
+  return agent.attentionReason === "permission";
+}
+
+/**
+ * Map Paseo lifecycle → card status.
+ * `closed` alone means runtime unloaded / terminated; when attention still
+ * records a finished/error outcome (legacy daemon restarts that overwrote
+ * lastStatus), prefer that over labeling every closed agent "canceled".
+ */
+export function paseoAgentStatus(
+  status: AgentLifecycleStatus,
+  attentionReason?: Agent["attentionReason"],
+): SwarmCardStatus {
+  switch (status) {
+    case "initializing":
+    case "running":
+      return "running";
+    case "idle":
+      return "completed";
+    case "error":
+      return "failed";
+    case "closed":
+      if (attentionReason === "finished") {
+        return "completed";
+      }
+      if (attentionReason === "error") {
+        return "failed";
+      }
+      return "canceled";
+  }
+}
+
+export function paseoAgentDisplayState(agent: Agent): SwarmCardDisplayState {
+  if (!isTerminalLifecycle(agent.status) && paseoAgentNeedsPermission(agent)) {
+    return "waiting";
+  }
+  switch (agent.status) {
+    case "initializing":
+      return "queued";
+    case "running":
+      return "working";
+    case "idle":
+      return "completed";
+    case "error":
+      return "failed";
+    case "closed":
+      if (agent.attentionReason === "finished") {
+        return "completed";
+      }
+      if (agent.attentionReason === "error") {
+        return "failed";
+      }
+      return "canceled";
+  }
+}
+
+function providerDisplayState(
+  status: ProviderSubagentDescriptorPayload["status"],
+): SwarmCardDisplayState {
+  switch (status) {
+    case "running":
+      return "working";
+    case "completed":
+      return "completed";
+    case "failed":
+      return "failed";
+    case "canceled":
+      return "canceled";
+  }
+}
+
+export interface BuildSwarmCardViewModelsInput {
   serverId: string;
   parentAgentId: string;
+  paseoAgents: Agent[];
   descriptors: Map<string, ProviderSubagentDescriptorPayload>;
   timelines: Map<string, ProviderSubagentTimelineState>;
-}): SwarmCardViewModel[] {
+  agentStreamTail?: Map<string, StreamItem[]>;
+  paseoHistory?: Map<string, PaseoSubagentHistoryEntry>;
+}
+
+function buildPaseoSwarmCards(input: BuildSwarmCardViewModelsInput): SwarmCardViewModel[] {
+  const cards: SwarmCardViewModel[] = [];
+  const streamTail = input.agentStreamTail;
+  for (const agent of input.paseoAgents) {
+    const createdAt = agent.createdAt.toISOString();
+    const updatedAt = agent.updatedAt.toISOString();
+    // Live stream wins while it has items; once the agent finishes the tail is
+    // cleared and the persisted-history cache takes over.
+    const tail = streamTail?.get(agent.id);
+    const history = input.paseoHistory?.get(agent.id);
+    cards.push({
+      key: `paseo:${agent.id}`,
+      kind: "paseo",
+      subagentId: agent.id,
+      parentAgentId: agent.parentAgentId ?? input.parentAgentId,
+      provider: agent.provider,
+      title: agent.title?.trim() || FALLBACK_TITLE,
+      description: null,
+      status: paseoAgentStatus(agent.status, agent.attentionReason),
+      displayState: paseoAgentDisplayState(agent),
+      toolCallCount: countStreamToolCalls(tail) ?? history?.toolCallCount ?? 0,
+      lastActivityPreview: lastStreamActivityPreview(tail) ?? history?.lastPreview ?? null,
+      createdAt,
+      updatedAt,
+      durationMs: durationMs(createdAt, updatedAt),
+    });
+  }
+  return cards;
+}
+
+function buildProviderSwarmCards(input: BuildSwarmCardViewModelsInput): SwarmCardViewModel[] {
   const cards: SwarmCardViewModel[] = [];
   for (const [key, subagent] of input.descriptors) {
     if (key !== providerSubagentKey(input.serverId, input.parentAgentId, subagent.id)) {
@@ -139,12 +312,14 @@ export function buildSwarmCardViewModels(input: {
     const description = subagent.description?.trim() || null;
     cards.push({
       key,
+      kind: "provider",
       subagentId: subagent.id,
       parentAgentId: subagent.parentAgentId,
       provider: subagent.provider,
       title,
       description,
       status: subagent.status,
+      displayState: providerDisplayState(subagent.status),
       toolCallCount: countToolCalls(timeline),
       lastActivityPreview: lastActivityPreview(timeline),
       createdAt: subagent.createdAt,
@@ -152,7 +327,15 @@ export function buildSwarmCardViewModels(input: {
       durationMs: durationMs(subagent.createdAt, subagent.updatedAt),
     });
   }
-  return cards.sort(compareSwarmCards);
+  return cards;
+}
+
+export function buildSwarmCardViewModels(
+  input: BuildSwarmCardViewModelsInput,
+): SwarmCardViewModel[] {
+  return [...buildPaseoSwarmCards(input), ...buildProviderSwarmCards(input)].sort(
+    compareSwarmCards,
+  );
 }
 
 export function summarizeSwarmCards(cards: SwarmCardViewModel[]): SwarmSummary {

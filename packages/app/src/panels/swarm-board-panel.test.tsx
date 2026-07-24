@@ -25,6 +25,7 @@ const { state, theme } = vi.hoisted(() => {
         blue: { 500: "#3b82f6" },
         green: { 500: "#22c55e" },
         red: { 500: "#ef4444" },
+        amber: { 500: "#f59e0b" },
       },
     },
   };
@@ -127,12 +128,14 @@ const SwarmBoardPanel = swarmBoardPanelRegistration.component;
 function makeCard(overrides: Partial<SwarmCardViewModel>): Record<string, unknown> {
   return {
     key: "server-1\0parent-1\0sub-1",
+    kind: "provider",
     subagentId: "sub-1",
     parentAgentId: "parent-1",
     provider: "claude",
     title: "Research agent",
     description: null,
     status: "completed",
+    displayState: "completed",
     toolCallCount: 3,
     lastActivityPreview: "Edited src/app.tsx",
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -179,6 +182,7 @@ describe("SwarmBoardPanel", () => {
         subagentId: "sub-2",
         title: "Runner agent",
         status: "running",
+        displayState: "working",
         toolCallCount: 5,
         lastActivityPreview: null,
       }),
@@ -190,8 +194,8 @@ describe("SwarmBoardPanel", () => {
     expect(screen.getByTestId("swarm-board-card-sub-2")).toBeTruthy();
     expect(screen.getByText("Research agent")).toBeTruthy();
     expect(screen.getByText("Runner agent")).toBeTruthy();
-    expect(screen.getByText("swarmBoard.status.completed")).toBeTruthy();
-    expect(screen.getByText("swarmBoard.status.running")).toBeTruthy();
+    expect(screen.getByText("swarmBoard.displayState.completed")).toBeTruthy();
+    expect(screen.getByText("swarmBoard.displayState.working")).toBeTruthy();
     expect(screen.getByText("swarmBoard.toolCalls(3)")).toBeTruthy();
     expect(screen.getByText("swarmBoard.toolCalls(5)")).toBeTruthy();
     expect(screen.getByText("Edited src/app.tsx")).toBeTruthy();
@@ -212,6 +216,22 @@ describe("SwarmBoardPanel", () => {
     ]);
   });
 
+  it("opens the agent tab when a paseo card is pressed", () => {
+    state.cards = [
+      makeCard({
+        key: "paseo:paseo-1",
+        kind: "paseo",
+        subagentId: "paseo-1",
+        title: "Paseo child",
+      }),
+    ];
+
+    render(React.createElement(SwarmBoardPanel));
+    fireEvent.click(screen.getByTestId("swarm-board-card-paseo-1"));
+
+    expect(state.openTabCalls).toEqual([{ kind: "agent", agentId: "paseo-1" }]);
+  });
+
   it("shows the unsupported state when the daemon lacks provider subagents", () => {
     state.supported = false;
 
@@ -220,5 +240,32 @@ describe("SwarmBoardPanel", () => {
     expect(screen.getByTestId("swarm-board-unsupported")).toBeTruthy();
     expect(screen.queryByTestId("swarm-board-empty")).toBeNull();
     expect(state.refreshCalls).toHaveLength(0);
+  });
+
+  it("renders a progress bar on each card without crashing", () => {
+    state.cards = [
+      makeCard({ status: "completed", displayState: "completed" }),
+      makeCard({
+        key: "server-1\0parent-1\0sub-2",
+        subagentId: "sub-2",
+        status: "running",
+        displayState: "working",
+        lastActivityPreview: null,
+      }),
+      makeCard({
+        key: "paseo:paseo-1",
+        kind: "paseo",
+        subagentId: "paseo-1",
+        status: "running",
+        displayState: "waiting",
+      }),
+    ];
+
+    render(React.createElement(SwarmBoardPanel));
+
+    const bars = screen.getAllByTestId("swarm-board-progress");
+    expect(bars).toHaveLength(3);
+    expect(screen.getAllByTestId("swarm-board-progress-fill")).toHaveLength(3);
+    expect(screen.getByText("swarmBoard.displayState.waiting")).toBeTruthy();
   });
 });

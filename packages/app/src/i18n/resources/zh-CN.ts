@@ -1512,6 +1512,10 @@ export const zhCN: TranslationResources = {
     title: "Swarm 面板",
     openAction: "打开 Swarm 面板",
     openTooltip: "以实时卡片查看所有 subagent",
+    showListAction: "显示列表",
+    showListTooltip: "在当前会话内切换为紧凑列表",
+    showBoardAction: "显示看板",
+    showBoardTooltip: "在当前会话内显示 subagent 实时卡片",
     empty: "还没有 subagent",
     toolCalls: "{{count}} 次工具调用",
     status: {
@@ -1520,7 +1524,16 @@ export const zhCN: TranslationResources = {
       failed: "失败",
       canceled: "已取消",
     },
+    displayState: {
+      queued: "排队中",
+      working: "工作中",
+      waiting: "等待批准",
+      completed: "已完成",
+      failed: "失败",
+      canceled: "已取消",
+    },
     lastActivityNone: "暂无活动",
+    inlineHeader: "{{count}} 个助手 | {{title}}",
   },
   panels: {
     draft: {

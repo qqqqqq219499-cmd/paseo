@@ -1721,13 +1721,17 @@ export const useSessionStore = create<SessionStore>()(
             status: agent.status,
             lastActivityAt,
             cwd: agent.cwd,
+            workspaceId: agent.workspaceId,
             provider: agent.provider,
             pendingPermissionCount: agent.pendingPermissions.length,
             requiresAttention: agent.requiresAttention ?? false,
             attentionReason: agent.attentionReason ?? null,
             attentionTimestamp: agent.attentionTimestamp ?? null,
+            archivedAt: agent.archivedAt ?? null,
             createdAt: agent.createdAt,
             labels: agent.labels,
+            projectPlacement: agent.projectPlacement,
+            parentAgentId: agent.parentAgentId ?? null,
           });
         }
         return entries;

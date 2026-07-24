@@ -452,3 +452,25 @@
 
 - Authenticode unsigned (SmartScreen possible).
 - Local WIP not committed; package includes working-tree Swarm Board + other unstaged changes.
+
+## 2026-07-24 - Task: Swarm inline panel specification acceptance and history-cache repair
+
+### What was done
+
+- Audited the in-progress inline Swarm implementation against the requested session placement, grouping, card interaction, i18n, and history-cache requirements.
+- Corrected the Paseo subagent history cache key so stored finished-agent summaries are visible to the Swarm board model.
+- Added a regression test for cache-key collisions and updated existing cache tests to use the canonical key helper.
+
+### Testing
+
+- `cd packages/app && npx vitest run src/subagents src/agent-stream src/hooks` exited 0: 52 test files and 456 tests passed.
+- `cd packages/app && npm run typecheck` exited 0 (`tsgo --noEmit`).
+- Checked the Swarm source and all eight i18n resource files for CRLF; each reported 0 carriage returns. Each resource file contains `swarmBoard.inlineHeader`.
+
+### Notes
+
+- `packages/app/src/subagents/paseo-history-store.ts` - changed the cache key to `serverId\0agentId`, matching the Swarm board's server-scoped lookup.
+- `packages/app/src/subagents/paseo-history-store.test.ts` - covered the canonical key and collision avoidance; updated cache assertions.
+- `progress.md` - appended this acceptance and verification record.
+- `fetchAgentHistory` returns paginated agent-directory snapshots only, without timeline tool calls or previews; the current app-only implementation continues to use `fetchAgentTimeline` for those required summary fields. Changing that source requires an explicit client/server contract change.
+- Rollback: remove the two untracked `paseo-history-store` files (which belong to the in-progress Swarm work) or restore their prior worker version, and remove this appended progress entry. Current HEAD rollback point: `86c2d4fe9`.

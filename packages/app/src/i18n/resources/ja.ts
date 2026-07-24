@@ -1547,6 +1547,10 @@ export const ja: TranslationResources = {
     title: "Swarm ボード",
     openAction: "Swarm ボードを開く",
     openTooltip: "すべてのサブエージェントをライブカードで表示",
+    showListAction: "Show list",
+    showListTooltip: "Switch to the compact subagent list inside this session",
+    showBoardAction: "Show board",
+    showBoardTooltip: "Show live subagent cards inside this session",
     empty: "サブエージェントはまだありません",
     toolCalls: "{{count}} 回のツール呼び出し",
     status: {
@@ -1555,7 +1559,16 @@ export const ja: TranslationResources = {
       failed: "失敗",
       canceled: "キャンセル済み",
     },
+    displayState: {
+      queued: "Queued",
+      working: "Working",
+      waiting: "Waiting",
+      completed: "Completed",
+      failed: "Failed",
+      canceled: "Canceled",
+    },
     lastActivityNone: "アクティビティはまだありません",
+    inlineHeader: "{{count}} helpers | {{title}}",
   },
   panels: {
     draft: {

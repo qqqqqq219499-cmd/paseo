@@ -1577,6 +1577,10 @@ export const fr: TranslationResources = {
     title: "Tableau Swarm",
     openAction: "Ouvrir le tableau Swarm",
     openTooltip: "Voir tous les sous-agents sous forme de cartes en direct",
+    showListAction: "Show list",
+    showListTooltip: "Switch to the compact subagent list inside this session",
+    showBoardAction: "Show board",
+    showBoardTooltip: "Show live subagent cards inside this session",
     empty: "Aucun sous-agent pour le moment",
     toolCalls: "{{count}} appels d'outils",
     status: {
@@ -1585,7 +1589,16 @@ export const fr: TranslationResources = {
       failed: "Échec",
       canceled: "Annulé",
     },
+    displayState: {
+      queued: "Queued",
+      working: "Working",
+      waiting: "Waiting",
+      completed: "Completed",
+      failed: "Failed",
+      canceled: "Canceled",
+    },
     lastActivityNone: "Aucune activité pour le moment",
+    inlineHeader: "{{count}} helpers | {{title}}",
   },
   panels: {
     draft: {

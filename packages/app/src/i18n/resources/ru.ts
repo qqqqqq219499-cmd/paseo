@@ -1565,6 +1565,10 @@ export const ru: TranslationResources = {
     title: "Панель Swarm",
     openAction: "Открыть панель Swarm",
     openTooltip: "Просмотреть всех субагентов в виде живых карточек",
+    showListAction: "Show list",
+    showListTooltip: "Switch to the compact subagent list inside this session",
+    showBoardAction: "Show board",
+    showBoardTooltip: "Show live subagent cards inside this session",
     empty: "Пока нет субагентов",
     toolCalls: "{{count}} вызовов инструментов",
     status: {
@@ -1573,7 +1577,16 @@ export const ru: TranslationResources = {
       failed: "Ошибка",
       canceled: "Отменено",
     },
+    displayState: {
+      queued: "Queued",
+      working: "Working",
+      waiting: "Waiting",
+      completed: "Completed",
+      failed: "Failed",
+      canceled: "Canceled",
+    },
     lastActivityNone: "Пока нет активности",
+    inlineHeader: "{{count}} helpers | {{title}}",
   },
   panels: {
     draft: {
