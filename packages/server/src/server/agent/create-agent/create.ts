@@ -26,6 +26,8 @@ import {
   emitLiveTimelineItemIfAgentKnown,
 } from "../timeline-append.js";
 import { resolveCreateAgentIntent } from "./intent.js";
+import { registerAgentAutoArchive } from "../create-agent-lifecycle-dispatch.js";
+import { archiveAgentCommand } from "../lifecycle-command.js";
 
 export interface CreateAgentSessionWorktreeResult {
   sessionConfig: AgentSessionConfig;
@@ -92,6 +94,7 @@ export interface CreateAgentFromMcpInput {
   promptFailure?: CreateAgentPromptFailureMode;
   background: boolean;
   notifyOnFinish: boolean;
+  autoArchive?: boolean;
   internal?: boolean;
   detached?: boolean;
   owner?: AgentOwner;
@@ -194,6 +197,21 @@ export async function createAgentCommand(
   let initialPromptError: unknown | null = null;
   if (input.kind === "mcp") {
     input.onCreated?.({ agentId: snapshot.id, createdWorktree: resolved.createdWorktree ?? null });
+    if (input.autoArchive === true) {
+      registerAgentAutoArchive({
+        agentManager: dependencies.agentManager,
+        agentId: snapshot.id,
+        archive: () =>
+          archiveAgentCommand(
+            {
+              agentManager: dependencies.agentManager,
+              agentStorage: dependencies.agentStorage,
+              logger: dependencies.logger,
+            },
+            snapshot.id,
+          ),
+      });
+    }
   }
   if (resolved.prompt !== undefined) {
     const sendResult = await sendInitialPrompt(dependencies, resolved, snapshot);

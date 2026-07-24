@@ -154,6 +154,17 @@ function buildStoredAgentConfig(record: StoredAgentRecord): AgentSessionConfig {
   return stripInternalPaseoMcpServer(config);
 }
 
+export type CloseAgentMode = "terminate" | "release";
+
+export interface CloseAgentOptions {
+  /**
+   * terminate (default): persist lastStatus=closed — user close/kill semantics.
+   * release: unload runtime but preserve idle/error terminal status on disk
+   * (daemon shutdown + idle collection). Busy agents still persist as closed.
+   */
+  mode?: CloseAgentMode;
+}
+
 export { AGENT_LIFECYCLE_STATUSES, type AgentLifecycleStatus };
 export type {
   AgentTimelineCursor,
@@ -1347,13 +1358,13 @@ export class AgentManager {
     }
   }
 
-  closeAgent(agentId: string): Promise<void> {
+  closeAgent(agentId: string, options?: CloseAgentOptions): Promise<void> {
     const existing = this.inFlightAgentCloses.get(agentId);
     if (existing) {
       return existing;
     }
 
-    const close = this.closeAgentRuntime(agentId);
+    const close = this.closeAgentRuntime(agentId, options);
     this.inFlightAgentCloses.set(agentId, close);
     const clearClose = () => {
       if (this.inFlightAgentCloses.get(agentId) === close) {
@@ -1364,8 +1375,10 @@ export class AgentManager {
     return close;
   }
 
-  private async closeAgentRuntime(agentId: string): Promise<void> {
+  private async closeAgentRuntime(agentId: string, options?: CloseAgentOptions): Promise<void> {
     const agent = this.requireAgent(agentId);
+    const mode: CloseAgentMode = options?.mode ?? "terminate";
+    const previousLifecycle = agent.lifecycle;
     this.logger.trace(
       {
         agentId,
@@ -1373,6 +1386,7 @@ export class AgentManager {
         sessionId: agent.persistence?.sessionId ?? undefined,
         turnId: agent.activeForegroundTurnId ?? undefined,
         lifecycle: agent.lifecycle,
+        closeMode: mode,
         activeForegroundTurnId: agent.activeForegroundTurnId,
         pendingPermissions: agent.pendingPermissions.size,
       },
@@ -1388,7 +1402,10 @@ export class AgentManager {
 
     let persistError: unknown;
     try {
-      await this.persistSnapshot(closedAgent);
+      await this.persistClosedAgentSnapshot(closedAgent, {
+        mode,
+        previousLifecycle,
+      });
     } catch (error) {
       persistError = error;
     }
@@ -1398,6 +1415,8 @@ export class AgentManager {
         agentId,
         provider: closedAgent.provider,
         sessionId: closedAgent.persistence?.sessionId ?? undefined,
+        closeMode: mode,
+        previousLifecycle,
       },
       "agent.manager.close.complete",
     );
@@ -1408,6 +1427,43 @@ export class AgentManager {
     if (persistError !== undefined) {
       throw persistError;
     }
+  }
+
+  /**
+   * Persist after unloading an agent runtime.
+   * - terminate: lastStatus=closed (explicit close/kill).
+   * - release: keep idle/error so Swarm/history show completed/failed after daemon restart
+   *   or idle runtime collection; busy agents still become closed.
+   * - already archived: never clobber the archived lastStatus written by archive paths.
+   */
+  private async persistClosedAgentSnapshot(
+    closedAgent: ManagedAgentClosed,
+    options: { mode: CloseAgentMode; previousLifecycle: AgentLifecycleStatus },
+  ): Promise<void> {
+    if (!this.registry || closedAgent.internal) {
+      return;
+    }
+
+    const existing = await this.registry.get(closedAgent.id);
+    if (existing?.archivedAt) {
+      // Archive already wrote the durable terminal status; only keep memory unload.
+      return;
+    }
+
+    const preserveTerminal =
+      options.mode === "release" &&
+      (options.previousLifecycle === "idle" || options.previousLifecycle === "error");
+
+    if (preserveTerminal) {
+      const forPersist = {
+        ...closedAgent,
+        lifecycle: options.previousLifecycle,
+      } as ManagedAgent;
+      await this.persistSnapshot(forPersist);
+      return;
+    }
+
+    await this.persistSnapshot(closedAgent);
   }
 
   async collectIdleAgents(options: {
@@ -1428,7 +1484,7 @@ export class AgentManager {
         ...(current.persistence?.sessionId ? { sessionId: current.persistence.sessionId } : {}),
       };
       try {
-        await this.closeAgent(current.id);
+        await this.closeAgent(current.id, { mode: "release" });
         result.collected.push(entry);
       } catch (error) {
         result.failures.push({ ...entry, error });

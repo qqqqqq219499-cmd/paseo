@@ -5940,7 +5940,7 @@ test("archiveAgent persists archivedAt and updatedAt before emitting closed stat
   expect(stored).toMatchObject({
     id: agent.id,
     archivedAt,
-    lastStatus: "closed",
+    lastStatus: "idle",
     requiresAttention: false,
     attentionReason: null,
     attentionTimestamp: null,
@@ -6190,8 +6190,8 @@ test("archiveAgent cascade archives in-memory children with the full archive con
   const storedChild = await storage.get(child.id);
   const storedUnrelated = await storage.get(unrelated.id);
 
-  expectArchivedAgentRecord(storedParent, "closed");
-  expectArchivedAgentRecord(storedChild, "closed");
+  expectArchivedAgentRecord(storedParent, "idle");
+  expectArchivedAgentRecord(storedChild, "idle");
   expect(storedUnrelated?.archivedAt).toBeUndefined();
 });
 
@@ -7208,6 +7208,91 @@ test("close during in-flight stream does not clear persistence sessionId", async
   expect(persisted?.persistence?.sessionId).toBe(snapshot.persistence?.sessionId);
 });
 
+test("closeAgent release mode preserves idle lastStatus on disk", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-close-release-idle-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000310",
+  });
+
+  try {
+    const snapshot = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+      workspaceId: undefined,
+    });
+    await manager.runAgent(snapshot.id, "finish");
+    await manager.flush();
+    expect((await storage.get(snapshot.id))?.lastStatus).toBe("idle");
+
+    await manager.closeAgent(snapshot.id, { mode: "release" });
+    await manager.flush();
+
+    expect(manager.getAgent(snapshot.id)).toBeNull();
+    const stored = await storage.get(snapshot.id);
+    expect(stored?.lastStatus).toBe("idle");
+    expect(stored?.attentionReason).toBe("finished");
+  } finally {
+    await manager.flush().catch(() => undefined);
+    await storage.flush().catch(() => undefined);
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("closeAgent terminate mode still persists closed lastStatus", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-close-terminate-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000311",
+  });
+
+  try {
+    const snapshot = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+      workspaceId: undefined,
+    });
+    await manager.runAgent(snapshot.id, "finish");
+    await manager.closeAgent(snapshot.id);
+    await manager.flush();
+    expect((await storage.get(snapshot.id))?.lastStatus).toBe("closed");
+  } finally {
+    await manager.flush().catch(() => undefined);
+    await storage.flush().catch(() => undefined);
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("closeAgent after archive does not clobber archived lastStatus", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-close-after-archive-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000312",
+  });
+
+  try {
+    const snapshot = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+      workspaceId: undefined,
+    });
+    await manager.runAgent(snapshot.id, "finish");
+    await manager.archiveAgent(snapshot.id);
+    await manager.flush();
+    const stored = await storage.get(snapshot.id);
+    expect(stored?.archivedAt).toEqual(expect.any(String));
+    // release-preserving archive path should keep completed idle, not overwrite to closed
+    expect(stored?.lastStatus).toBe("idle");
+  } finally {
+    await manager.flush().catch(() => undefined);
+    await storage.flush().catch(() => undefined);
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
 test("closeAgent persists one final closed snapshot", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-close-no-persist-"));
   const storagePath = join(workdir, "agents");
@@ -7305,7 +7390,7 @@ test("collectIdleAgents releases an idle runtime and resumes the same agent and 
     const stored = await storage.get(created.id);
     expect(stored).toMatchObject({
       id: created.id,
-      lastStatus: "closed",
+      lastStatus: "idle",
       workspaceId: "workspace-idle-collection",
     });
     expect(stored?.archivedAt).toBeFalsy();
@@ -7762,7 +7847,7 @@ test("provider close failure still persists and emits a resumable closed agent",
       error: expect.objectContaining({ message: "provider cleanup failed" }),
     });
     const stored = await storage.get(created.id);
-    expect(stored).toMatchObject({ lastStatus: "closed" });
+    expect(stored).toMatchObject({ lastStatus: "idle" });
     expect(stored?.archivedAt).toBeFalsy();
 
     await expect(

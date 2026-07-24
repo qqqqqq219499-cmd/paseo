@@ -1677,7 +1677,8 @@ async function closeAllAgents(logger: Logger, agentManager: AgentManager): Promi
   await Promise.all(
     agents.map(async (agent) => {
       try {
-        await agentManager.closeAgent(agent.id);
+        // release: keep idle/error on disk so history cards stay completed/failed after restart
+        await agentManager.closeAgent(agent.id, { mode: "release" });
       } catch (err) {
         logger.error({ err, agentId: agent.id }, "Failed to close agent");
       }

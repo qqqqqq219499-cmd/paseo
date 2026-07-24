@@ -455,3 +455,77 @@ test("session create keeps an explicit title after the initial prompt settles", 
     rmSync(workdir, { recursive: true, force: true });
   }
 });
+
+test("mcp create with autoArchive true archives after the first turn completes", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "create-agent-auto-archive-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const agentManager = createRealAgentManager(storage);
+
+  try {
+    const { snapshot } = await createAgentCommand(
+      {
+        agentManager,
+        agentStorage: storage,
+        logger,
+        providerSnapshotManager: createProviderSnapshotManagerStub().manager,
+        ensureWorkspaceForCreate: async () => "ws-auto-archive",
+      },
+      {
+        kind: "mcp",
+        provider: "codex",
+        cwd: workdir,
+        title: "auto archive child",
+        initialPrompt: "Say done.",
+        background: true,
+        notifyOnFinish: false,
+        autoArchive: true,
+      },
+    );
+
+    await agentManager.waitForAgentEvent(snapshot.id, { waitForActive: true });
+
+    await vi.waitFor(async () => {
+      const record = await storage.get(snapshot.id);
+      expect(record?.archivedAt).toBeTruthy();
+    });
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("mcp create without autoArchive leaves the agent active after the first turn", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "create-agent-no-auto-archive-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const agentManager = createRealAgentManager(storage);
+
+  try {
+    const { snapshot } = await createAgentCommand(
+      {
+        agentManager,
+        agentStorage: storage,
+        logger,
+        providerSnapshotManager: createProviderSnapshotManagerStub().manager,
+        ensureWorkspaceForCreate: async () => "ws-no-auto-archive",
+      },
+      {
+        kind: "mcp",
+        provider: "codex",
+        cwd: workdir,
+        title: "keep child",
+        initialPrompt: "Say done.",
+        background: true,
+        notifyOnFinish: false,
+      },
+    );
+
+    await agentManager.waitForAgentEvent(snapshot.id, { waitForActive: true });
+    // Give any accidental auto-archive a tick to run.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const record = await storage.get(snapshot.id);
+    expect(record?.archivedAt).toBeUndefined();
+    expect(agentManager.getAgent(snapshot.id)).toBeTruthy();
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});

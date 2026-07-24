@@ -1008,6 +1008,12 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
       .describe(
         "Get notified when the created agent finishes, errors, or needs permission. Set false only for truly fire-and-forget agents.",
       ),
+    autoArchive: z
+      .boolean()
+      .optional()
+      .describe(
+        "Automatically archive the created agent when its first turn finishes (completed, failed, or canceled). Use for fire-and-forget subagents that should not linger in the session list.",
+      ),
   };
   const canonicalTopLevelInputSchema = {
     ...canonicalCreateAgentFields,
@@ -1391,7 +1397,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
     {
       title: "Create agent",
       description:
-        "Create an agent. Agent-scoped creation defaults to your workspace and creates your subagent. Top-level creation without workspaceId creates a new local workspace. Requires provider/model (for example codex/gpt-5.4) and an initial prompt. Do not guess; call list_providers and list_models first if uncertain.",
+        "Create an agent. Agent-scoped creation defaults to your workspace and creates your subagent. Top-level creation without workspaceId creates a new local workspace. Requires provider/model (for example codex/gpt-5.4) and an initial prompt. Do not guess; call list_providers and list_models first if uncertain. Supports autoArchive to archive the subagent after its first turn finishes.",
       inputSchema: createAgentInputSchema,
       outputSchema: {
         agentId: z.string(),
@@ -1449,6 +1455,9 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
           mode: parsedArgs.settings?.modeId,
           background: requestedBackground,
           notifyOnFinish,
+          ...(resolvedArgs.kind === "agent-scoped" && "autoArchive" in parsedArgs
+            ? { autoArchive: parsedArgs.autoArchive }
+            : {}),
           detached: resolvedArgs.detached,
           callerAgentId,
           callerContext,
