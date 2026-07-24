@@ -67,17 +67,20 @@ appImage:
   # version stays discoverable via the release tag and the in-app version.
   artifactName: "Paseo-${arch}.${ext}"
 win:
-  artifactName: "Paseo-Setup-${version}-${arch}.${ext}"
+  # 解压版/便携版：解压 zip 或双击 portable exe 即可运行，无需 NSIS 安装。
+  # 如需恢复安装包，把 target 里的 nsis 加回并还原 artifactName 为
+  # "Paseo-Setup-${version}-${arch}.${ext}"。
+  artifactName: "Paseo-${version}-${arch}.${ext}"
   icon: assets/icon.ico
   extraResources:
     - from: bin/paseo.cmd
       to: bin/paseo.cmd
   target:
-    - target: nsis
+    - target: zip
       arch:
         - x64
         - arm64
-    - target: zip
+    - target: portable
       arch:
         - x64
         - arm64
