@@ -2063,7 +2063,10 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     }
 
     this.pendingPermissions.delete(requestId);
-    const selectedOption = selectPermissionOption(pending.options, response);
+    const selectedOption =
+      pending.request.kind === "question" && response.behavior === "allow"
+        ? selectQuestionPermissionOption(pending.options, response)
+        : selectPermissionOption(pending.options, response);
     pending.resolve(
       selectedOption
         ? {
@@ -3451,12 +3454,205 @@ function extractTerminalContent(
   };
 }
 
+const KIMI_QUESTION_OPTION_ID_RE = /^q(\d+)_(opt_(\d+)|skip)$/;
+
+function parseKimiQuestionOptionIds(
+  options: PermissionOption[] | undefined,
+): { questionIndex: number; hasOpt: boolean; hasSkip: boolean } | null {
+  if (!Array.isArray(options) || options.length === 0) {
+    return null;
+  }
+
+  let questionIndex: number | null = null;
+  let hasOpt = false;
+  let hasSkip = false;
+  let skipCount = 0;
+
+  for (const option of options) {
+    if (typeof option.optionId !== "string") {
+      return null;
+    }
+    const match = KIMI_QUESTION_OPTION_ID_RE.exec(option.optionId);
+    if (!match) {
+      return null;
+    }
+    const n = Number(match[1]);
+    if (questionIndex === null) {
+      questionIndex = n;
+    } else if (questionIndex !== n) {
+      return null;
+    }
+    if (match[2] === "skip" || match[2]?.startsWith("skip")) {
+      hasSkip = true;
+      skipCount += 1;
+    } else {
+      hasOpt = true;
+    }
+  }
+
+  if (questionIndex === null || !hasOpt || !hasSkip || skipCount !== 1) {
+    return null;
+  }
+
+  return { questionIndex, hasOpt, hasSkip };
+}
+
+function mapKimiQuestionOption(entry: unknown): { label: string; description?: string } | null {
+  if (!isRecord(entry)) {
+    return null;
+  }
+  let label: string | null = null;
+  if (typeof entry.label === "string") {
+    label = entry.label;
+  } else if (typeof entry.name === "string") {
+    label = entry.name;
+  }
+  if (!label) {
+    return null;
+  }
+  const description =
+    typeof entry.description === "string" && entry.description.trim().length > 0
+      ? entry.description
+      : undefined;
+  return description ? { label, description } : { label };
+}
+
+function buildKimiQuestionFromRawInput(
+  rawQuestion: Record<string, unknown>,
+  dismissLabel: string,
+): AgentPermissionRequest["input"] {
+  const optionList = Array.isArray(rawQuestion.options) ? rawQuestion.options : [];
+  const mappedOptions = optionList
+    .map(mapKimiQuestionOption)
+    .filter((entry): entry is { label: string; description?: string } => entry !== null);
+
+  const question = typeof rawQuestion.question === "string" ? rawQuestion.question : "";
+  const header =
+    typeof rawQuestion.header === "string" && rawQuestion.header.trim().length > 0
+      ? rawQuestion.header
+      : question;
+
+  return {
+    questions: [
+      {
+        question,
+        header,
+        options: mappedOptions,
+        multiSelect: false,
+        allowOther: false,
+        dismissLabel,
+      },
+    ],
+  };
+}
+
+function resolveKimiFallbackQuestion(
+  params: RequestPermissionRequest,
+  snapshot: ACPToolSnapshot,
+): string | null {
+  const content = params.toolCall.content;
+  if (Array.isArray(content)) {
+    for (const item of content) {
+      const record = isRecord(item as unknown)
+        ? (item as unknown as Record<string, unknown>)
+        : null;
+      if (
+        record &&
+        record.type === "text" &&
+        typeof record.text === "string" &&
+        record.text.trim().length > 0
+      ) {
+        return record.text;
+      }
+    }
+  }
+  const fallback = params.toolCall.title ?? snapshot.title;
+  if (typeof fallback === "string" && fallback.trim()) {
+    return fallback;
+  }
+  return null;
+}
+
+function mapKimiQuestionPermissionInput(
+  params: RequestPermissionRequest,
+  snapshot: ACPToolSnapshot,
+  questionIndex: number,
+): AgentPermissionRequest["input"] | null {
+  const rawInput = (snapshot.rawInput ?? params.toolCall.rawInput) as unknown;
+  const rawRecord = isRecord(rawInput) ? rawInput : null;
+  const questions = rawRecord && Array.isArray(rawRecord.questions) ? rawRecord.questions : null;
+  const rawQuestion = questions?.[questionIndex];
+  const skipOption = params.options.find(
+    (option) => typeof option.optionId === "string" && option.optionId.endsWith("_skip"),
+  );
+  const dismissLabel =
+    typeof skipOption?.name === "string" && skipOption.name.trim().length > 0
+      ? skipOption.name
+      : "Skip";
+
+  if (
+    isRecord(rawQuestion) &&
+    typeof rawQuestion.question === "string" &&
+    rawQuestion.question.trim()
+  ) {
+    return buildKimiQuestionFromRawInput(rawQuestion, dismissLabel);
+  }
+
+  const fallbackQuestion = resolveKimiFallbackQuestion(params, snapshot);
+  if (!fallbackQuestion) {
+    return null;
+  }
+
+  const fallbackOptions = params.options
+    .filter(
+      (option) =>
+        typeof option.optionId === "string" &&
+        KIMI_QUESTION_OPTION_ID_RE.test(option.optionId) &&
+        !option.optionId.endsWith("_skip"),
+    )
+    .map((option) => ({ label: option.name }));
+
+  return {
+    questions: [
+      {
+        question: fallbackQuestion,
+        header: fallbackQuestion,
+        options: fallbackOptions,
+        multiSelect: false,
+        allowOther: false,
+        dismissLabel,
+      },
+    ],
+  };
+}
+
 function mapPermissionRequest(
   provider: string,
   requestId: string,
   params: RequestPermissionRequest,
   snapshot: ACPToolSnapshot,
 ): AgentPermissionRequest {
+  const kimiQuestion = parseKimiQuestionOptionIds(params.options);
+  if (kimiQuestion) {
+    const input = mapKimiQuestionPermissionInput(params, snapshot, kimiQuestion.questionIndex);
+    if (input) {
+      return {
+        id: requestId,
+        provider,
+        name: snapshot.kind ?? snapshot.title,
+        kind: "question",
+        title: params.toolCall.title ?? snapshot.title,
+        input,
+        detail: mapToolDetail(snapshot, new Map()),
+        metadata: {
+          toolCallId: params.toolCall.toolCallId,
+          rawRequest: params,
+          options: params.options,
+        },
+      };
+    }
+  }
+
   const kind: AgentPermissionRequestKind = snapshot.kind === "switch_mode" ? "mode" : "tool";
   return {
     id: requestId,
@@ -3471,6 +3667,47 @@ function mapPermissionRequest(
       options: params.options,
     },
   };
+}
+
+function selectQuestionPermissionOption(
+  options: PermissionOption[],
+  response: Extract<AgentPermissionResponse, { behavior: "allow" }>,
+): PermissionOption | null {
+  const answers = isRecord(response.updatedInput?.answers)
+    ? (response.updatedInput.answers as Record<string, unknown>)
+    : null;
+  let selectedLabel: string | undefined;
+  if (answers) {
+    for (const value of Object.values(answers)) {
+      if (typeof value === "string" && value.trim().length > 0) {
+        selectedLabel = value;
+        break;
+      }
+    }
+  }
+
+  if (selectedLabel) {
+    const matched = options.find(
+      (option) =>
+        option.name === selectedLabel &&
+        typeof option.optionId === "string" &&
+        /^q\d+_opt_\d+$/.test(option.optionId),
+    );
+    if (matched) {
+      return matched;
+    }
+  }
+
+  const skip = options.find(
+    (option) =>
+      option.kind === "reject_once" ||
+      (typeof option.optionId === "string" && option.optionId.endsWith("_skip")),
+  );
+  if (skip) {
+    return skip;
+  }
+
+  return selectPermissionOption(options, response);
 }
 
 function selectPermissionOption(

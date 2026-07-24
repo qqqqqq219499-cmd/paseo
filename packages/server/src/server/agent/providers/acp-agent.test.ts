@@ -1403,10 +1403,257 @@ describe("ACPAgentSession Zed parity", () => {
 
     const requested = events.find((event) => event.type === "permission_requested");
     expect(requested?.request?.id).toEqual(expect.any(String));
+    expect((requested as { request?: { kind?: string } } | undefined)?.request?.kind).toBe("tool");
 
     await session.respondToPermission(requested!.request!.id, { behavior: "allow" });
     await expect(permission).resolves.toEqual({
       outcome: { outcome: "selected", optionId: "allow-once" },
+    });
+  });
+
+  test("maps kimi-style AskUserQuestion permission options to kind question", async () => {
+    const session = createSessionWithConfig({
+      provider: "kimi",
+      modeId: "agent",
+    });
+    const events: Array<{
+      type: string;
+      request?: {
+        id: string;
+        kind?: string;
+        input?: {
+          questions?: Array<{
+            question: string;
+            header: string;
+            options: Array<{ label: string; description?: string }>;
+            multiSelect: boolean;
+            allowOther: boolean;
+            dismissLabel?: string;
+          }>;
+        };
+      };
+    }> = [];
+    const permissionOptions: PermissionOption[] = [
+      { optionId: "q0_opt_0", name: "Option A", kind: "allow_once" },
+      { optionId: "q0_opt_1", name: "Option B", kind: "allow_once" },
+      { optionId: "q0_skip", name: "Skip", kind: "reject_once" },
+    ];
+
+    asInternals<ACPSessionInternals>(session).sessionId = "session-1";
+    session.subscribe((event) => {
+      events.push(
+        event as {
+          type: string;
+          request?: {
+            id: string;
+            kind?: string;
+            input?: {
+              questions?: Array<{
+                question: string;
+                header: string;
+                options: Array<{ label: string; description?: string }>;
+                multiSelect: boolean;
+                allowOther: boolean;
+                dismissLabel?: string;
+              }>;
+            };
+          };
+        },
+      );
+    });
+
+    const permission = session.requestPermission({
+      sessionId: "session-1",
+      toolCall: {
+        toolCallId: "ask-1",
+        title: "AskUserQuestion",
+        kind: "other",
+        status: "pending",
+        rawInput: {
+          questions: [
+            {
+              question: "Which path should we take?",
+              header: "Path",
+              options: [
+                { label: "Option A", description: "First choice" },
+                { label: "Option B", description: "Second choice" },
+              ],
+            },
+          ],
+        },
+      },
+      options: permissionOptions,
+    } satisfies RequestPermissionRequest);
+
+    await Promise.resolve();
+
+    const requested = events.find((event) => event.type === "permission_requested");
+    expect(requested?.request?.kind).toBe("question");
+    expect(requested?.request?.input?.questions).toEqual([
+      {
+        question: "Which path should we take?",
+        header: "Path",
+        options: [
+          { label: "Option A", description: "First choice" },
+          { label: "Option B", description: "Second choice" },
+        ],
+        multiSelect: false,
+        allowOther: false,
+        dismissLabel: "Skip",
+      },
+    ]);
+
+    await session.respondToPermission(requested!.request!.id, {
+      behavior: "allow",
+      updatedInput: {
+        answers: {
+          Path: "Option B",
+        },
+      },
+    });
+    await expect(permission).resolves.toEqual({
+      outcome: { outcome: "selected", optionId: "q0_opt_1" },
+    });
+  });
+
+  test("resolves kimi question allow with empty answers to q0_skip", async () => {
+    const session = createSessionWithConfig({
+      provider: "kimi",
+      modeId: "agent",
+    });
+    const events: Array<{ type: string; request?: { id: string } }> = [];
+    const permissionOptions: PermissionOption[] = [
+      { optionId: "q0_opt_0", name: "Option A", kind: "allow_once" },
+      { optionId: "q0_opt_1", name: "Option B", kind: "allow_once" },
+      { optionId: "q0_skip", name: "Skip", kind: "reject_once" },
+    ];
+
+    asInternals<ACPSessionInternals>(session).sessionId = "session-1";
+    session.subscribe((event) => {
+      events.push(event as { type: string; request?: { id: string } });
+    });
+
+    const permission = session.requestPermission({
+      sessionId: "session-1",
+      toolCall: {
+        toolCallId: "ask-2",
+        title: "AskUserQuestion",
+        kind: "other",
+        status: "pending",
+        rawInput: {
+          questions: [
+            {
+              question: "Pick one",
+              header: "Pick",
+              options: [{ label: "Option A" }, { label: "Option B" }],
+            },
+          ],
+        },
+      },
+      options: permissionOptions,
+    } satisfies RequestPermissionRequest);
+
+    await Promise.resolve();
+    const requested = events.find((event) => event.type === "permission_requested");
+    await session.respondToPermission(requested!.request!.id, {
+      behavior: "allow",
+      updatedInput: { answers: {} },
+    });
+    await expect(permission).resolves.toEqual({
+      outcome: { outcome: "selected", optionId: "q0_skip" },
+    });
+  });
+
+  test("resolves kimi question allow with unmatched label to q0_skip", async () => {
+    const session = createSessionWithConfig({
+      provider: "kimi",
+      modeId: "agent",
+    });
+    const events: Array<{ type: string; request?: { id: string } }> = [];
+    const permissionOptions: PermissionOption[] = [
+      { optionId: "q0_opt_0", name: "Option A", kind: "allow_once" },
+      { optionId: "q0_opt_1", name: "Option B", kind: "allow_once" },
+      { optionId: "q0_skip", name: "Skip", kind: "reject_once" },
+    ];
+
+    asInternals<ACPSessionInternals>(session).sessionId = "session-1";
+    session.subscribe((event) => {
+      events.push(event as { type: string; request?: { id: string } });
+    });
+
+    const permission = session.requestPermission({
+      sessionId: "session-1",
+      toolCall: {
+        toolCallId: "ask-3",
+        title: "AskUserQuestion",
+        kind: "other",
+        status: "pending",
+        rawInput: {
+          questions: [
+            {
+              question: "Pick one",
+              header: "Pick",
+              options: [{ label: "Option A" }, { label: "Option B" }],
+            },
+          ],
+        },
+      },
+      options: permissionOptions,
+    } satisfies RequestPermissionRequest);
+
+    await Promise.resolve();
+    const requested = events.find((event) => event.type === "permission_requested");
+    await session.respondToPermission(requested!.request!.id, {
+      behavior: "allow",
+      updatedInput: { answers: { Pick: "Not A Real Option" } },
+    });
+    await expect(permission).resolves.toEqual({
+      outcome: { outcome: "selected", optionId: "q0_skip" },
+    });
+  });
+
+  test("resolves kimi question deny to q0_skip", async () => {
+    const session = createSessionWithConfig({
+      provider: "kimi",
+      modeId: "agent",
+    });
+    const events: Array<{ type: string; request?: { id: string } }> = [];
+    const permissionOptions: PermissionOption[] = [
+      { optionId: "q0_opt_0", name: "Option A", kind: "allow_once" },
+      { optionId: "q0_opt_1", name: "Option B", kind: "allow_once" },
+      { optionId: "q0_skip", name: "Skip", kind: "reject_once" },
+    ];
+
+    asInternals<ACPSessionInternals>(session).sessionId = "session-1";
+    session.subscribe((event) => {
+      events.push(event as { type: string; request?: { id: string } });
+    });
+
+    const permission = session.requestPermission({
+      sessionId: "session-1",
+      toolCall: {
+        toolCallId: "ask-4",
+        title: "AskUserQuestion",
+        kind: "other",
+        status: "pending",
+        rawInput: {
+          questions: [
+            {
+              question: "Pick one",
+              header: "Pick",
+              options: [{ label: "Option A" }, { label: "Option B" }],
+            },
+          ],
+        },
+      },
+      options: permissionOptions,
+    } satisfies RequestPermissionRequest);
+
+    await Promise.resolve();
+    const requested = events.find((event) => event.type === "permission_requested");
+    await session.respondToPermission(requested!.request!.id, { behavior: "deny" });
+    await expect(permission).resolves.toEqual({
+      outcome: { outcome: "selected", optionId: "q0_skip" },
     });
   });
 
