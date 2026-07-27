@@ -203,7 +203,7 @@ import {
   createAgentCommand,
   type CreateAgentCommandDependencies,
 } from "./agent/create-agent/create.js";
-import { archiveAgentCommand } from "./agent/lifecycle-command.js";
+import { archiveAgentCommand, cancelAgentRunCommand } from "./agent/lifecycle-command.js";
 import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dispatch.js";
 import {
   HubRelationshipController,
@@ -218,8 +218,8 @@ import { DaemonExecutions } from "./hub/daemon-executions.js";
 
 const MAX_MCP_DEBUG_BATCH_ITEMS = 10;
 const REDACTED_LOG_VALUE = "[redacted]";
-const IDLE_AGENT_RUNTIME_TTL_MS = 2 * 60 * 1000;
-const IDLE_AGENT_RUNTIME_SWEEP_INTERVAL_MS = 15 * 1000;
+const IDLE_AGENT_RUNTIME_TTL_MS = 30 * 60 * 1000;
+const IDLE_AGENT_RUNTIME_SWEEP_INTERVAL_MS = 60 * 1000;
 const DOWNLOAD_OPEN_FLAGS =
   process.platform === "win32" ? constants.O_RDONLY : constants.O_RDONLY | constants.O_NOFOLLOW;
 
@@ -1067,6 +1067,27 @@ export async function createPaseoDaemon(
   };
   const createAgent = (input: Parameters<typeof createAgentCommand>[1]) =>
     createAgentCommand(createAgentCommandDependencies, input);
+  const archiveWorkspaceByIdExternal = (workspaceId: string, requestId: string) =>
+    archiveByScope(
+      {
+        paseoHome: config.paseoHome,
+        paseoWorktreesBaseRoot: config.worktreesRoot,
+        github,
+        workspaceGitService,
+        agentManager,
+        agentStorage,
+        findWorkspaceIdForCwd: findWorkspaceIdForCwdExternal,
+        listActiveWorkspaces: listActiveWorkspacesExternal,
+        archiveWorkspaceRecord: archiveWorkspaceRecordExternal,
+        emitWorkspaceUpdatesForWorkspaceIds: emitWorkspaceUpdatesExternal,
+        markWorkspaceArchiving: markWorkspaceArchivingExternal,
+        clearWorkspaceArchiving: clearWorkspaceArchivingExternal,
+        killTerminalsForWorkspace: (workspaceIdToKill) =>
+          killTerminalsForWorkspace({ terminalManager, sessionLogger: logger }, workspaceIdToKill),
+        sessionLogger: logger,
+      },
+      { scope: { kind: "workspace", workspaceId }, requestId },
+    );
   const hubAgentLifecycle = new CreateAgentLifecycleDispatch({
     paseoHome: config.paseoHome,
     worktreesRoot: config.worktreesRoot,
@@ -1108,12 +1129,11 @@ export async function createPaseoDaemon(
         agentManager,
         agentStorage,
         createAgent,
-        registerAutoArchive: ({ agentId, createdWorktree }) =>
-          hubAgentLifecycle.registerAutoArchiveIfRequested({
-            autoArchive: true,
-            agentId,
-            createdWorktree,
-          }),
+        interruptAgent: (agentId) => cancelAgentRunCommand({ agentManager, logger }, agentId),
+        archiveAgent: (agentId) =>
+          archiveAgentCommand({ agentManager, agentStorage, logger }, agentId),
+        listActiveWorkspaces: listActiveWorkspacesExternal,
+        archiveWorkspace: archiveWorkspaceByIdExternal,
         cleanupFailedCreate: (input) =>
           hubAgentLifecycle.cleanupCreatedWorktreeAfterFailedAgentCreate(input),
       }),

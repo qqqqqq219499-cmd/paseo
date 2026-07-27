@@ -406,6 +406,7 @@ export interface SessionOptions {
   onMessage: (msg: SessionOutboundMessage) => void;
   onMessageToSource?: (source: object, msg: SessionOutboundMessage) => void;
   onBinaryMessage?: (frame: Uint8Array) => void;
+  onBinaryMessageToSource?: (source: object, frame: Uint8Array) => Promise<void>;
   getTransportBufferedAmount?: () => number | null;
   onLifecycleIntent?: (intent: SessionLifecycleIntent) => void;
   onWorkspaceRecovered?: (workspace: PersistedWorkspaceRecord) => Promise<void>;
@@ -570,6 +571,9 @@ export class Session {
     | ((source: object, msg: SessionOutboundMessage) => void)
     | null;
   private readonly onBinaryMessage: ((frame: Uint8Array) => void) | null;
+  private readonly onBinaryMessageToSource:
+    | ((source: object, frame: Uint8Array) => Promise<void>)
+    | null;
   private readonly getTransportBufferedAmount: () => number | null;
   private readonly onLifecycleIntent: ((intent: SessionLifecycleIntent) => void) | null;
   private readonly onWorkspaceRecovered:
@@ -648,6 +652,7 @@ export class Session {
       onMessage,
       onMessageToSource,
       onBinaryMessage,
+      onBinaryMessageToSource,
       getTransportBufferedAmount,
       onLifecycleIntent,
       onWorkspaceRecovered,
@@ -701,6 +706,7 @@ export class Session {
     this.onMessage = onMessage;
     this.onMessageToSource = onMessageToSource ?? null;
     this.onBinaryMessage = onBinaryMessage ?? null;
+    this.onBinaryMessageToSource = onBinaryMessageToSource ?? null;
     this.getTransportBufferedAmount = getTransportBufferedAmount ?? (() => 0);
     this.onLifecycleIntent = onLifecycleIntent ?? null;
     this.onWorkspaceRecovered = onWorkspaceRecovered ?? null;
@@ -714,8 +720,8 @@ export class Session {
     });
     this.workspaceFilesSession = new WorkspaceFilesSession({
       host: {
-        emit: (msg) => this.emit(msg),
-        emitBinary: (frame) => this.emitBinary(frame),
+        emit: (msg, source) => this.emitForSource(msg, source),
+        emitBinary: (frame, source) => this.emitBinaryForFileTransfer(frame, source),
         hasBinaryChannel: () => this.onBinaryMessage !== null,
       },
       downloadTokenStore,
@@ -1790,7 +1796,7 @@ export class Session {
       this.dispatchCheckoutMessage(msg) ??
       this.dispatchWorkspaceRecoveryMessage(msg) ??
       this.dispatchWorkspaceAndProjectMessage(msg) ??
-      this.dispatchWorkspaceFileMessage(msg) ??
+      this.dispatchWorkspaceFileMessage(msg, source) ??
       this.dispatchProviderMessage(msg) ??
       this.dispatchTerminalMessage(msg) ??
       this.dispatchChatScheduleLoopMessage(msg) ??
@@ -1902,9 +1908,13 @@ export class Session {
   }
 
   private dispatchHubExecutionMessage(msg: SessionInboundMessage): Promise<void> | undefined {
-    return msg.type === "hub.execution.agent.create.request"
-      ? this.hubExecutionController?.createAgent(msg)
-      : undefined;
+    if (msg.type === "hub.execution.agent.create.request") {
+      return this.hubExecutionController?.createAgent(msg);
+    }
+    if (msg.type === "hub.execution.control.request") {
+      return this.hubExecutionController?.controlExecution(msg);
+    }
+    return undefined;
   }
 
   private dispatchAgentLifecycleMessage(msg: SessionInboundMessage): Promise<void> | undefined {
@@ -2106,10 +2116,13 @@ export class Session {
     }
   }
 
-  private dispatchWorkspaceFileMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+  private dispatchWorkspaceFileMessage(
+    msg: SessionInboundMessage,
+    source?: object,
+  ): Promise<void> | undefined {
     switch (msg.type) {
       case "file_explorer_request":
-        return this.workspaceFilesSession.handleFileExplorerRequest(msg);
+        return this.workspaceFilesSession.handleFileExplorerRequest(msg, source);
       case "fs.file.subscribe.request":
         return this.workspaceFilesSession.handleFileSubscribeRequest(msg);
       case "fs.file.unsubscribe.request":
@@ -6345,6 +6358,7 @@ export class Session {
             agentId,
             accepted: true,
             error: null,
+            outOfBand: true,
           },
         });
         return;
@@ -6372,6 +6386,7 @@ export class Session {
           agentId,
           accepted: true,
           error: null,
+          outOfBand: false,
         },
       });
     } catch (error) {
@@ -6540,6 +6555,22 @@ export class Session {
     } catch (error) {
       this.sessionLogger.error({ err: error }, "Failed to emit binary frame");
     }
+  }
+
+  private async emitBinaryForFileTransfer(frame: Uint8Array, source?: object): Promise<void> {
+    if (source && this.onBinaryMessageToSource) {
+      await this.onBinaryMessageToSource(source, frame);
+      return;
+    }
+    this.emitBinary(frame);
+  }
+
+  private emitForSource(msg: SessionOutboundMessage, source?: object): void {
+    if (source && this.onMessageToSource) {
+      this.onMessageToSource(source, msg);
+      return;
+    }
+    this.emit(msg);
   }
 
   /**
