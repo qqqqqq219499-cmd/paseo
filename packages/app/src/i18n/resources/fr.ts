@@ -2090,6 +2090,7 @@ export const fr: TranslationResources = {
         sendMessage: "Envoyer un message",
         queueMessage: "Message de file d'attente",
         muteUnmuteVoiceMode: "Mode vocal/unmutemuet",
+        switchProject: "Changer de projet",
       },
       helpNotes: {
         showKeyboardShortcuts:
