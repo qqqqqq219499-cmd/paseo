@@ -10,7 +10,7 @@ import type {
 } from "@/panels/panel-registry";
 import { useSessionStore } from "@/stores/session-store";
 import { useProviderSubagentStore } from "@/subagents/provider-store";
-import { SwarmBoardView } from "@/subagents/swarm-board-view";
+import { SwarmGraphView } from "@/subagents/swarm-graph-view";
 import type { SwarmCardViewModel } from "@/subagents/swarm-cards";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
 
@@ -78,7 +78,7 @@ function SwarmBoardPanel() {
     [openTab],
   );
   return (
-    <SwarmBoardView
+    <SwarmGraphView
       serverId={serverId}
       parentAgentId={target.parentAgentId}
       variant="panel"

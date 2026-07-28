@@ -56,6 +56,7 @@ export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId:
     attentionTimestamp,
     archivedAt,
     parentAgentId,
+    dependsOn: snapshot.dependsOn,
     labels: snapshot.labels,
   };
 }

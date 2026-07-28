@@ -1519,6 +1519,9 @@ export const zhCN: TranslationResources = {
     showListTooltip: "在当前会话内切换为紧凑列表",
     showBoardAction: "显示看板",
     showBoardTooltip: "在当前会话内显示 subagent 实时卡片",
+    graphView: "协作图",
+    showGraphAction: "显示协作图",
+    showGraphTooltip: "显示 swarm 协作关系图",
     empty: "还没有 subagent",
     toolCalls: "{{count}} 次工具调用",
     status: {

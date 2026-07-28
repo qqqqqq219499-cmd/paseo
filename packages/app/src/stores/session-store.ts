@@ -131,6 +131,7 @@ export interface Agent {
   attentionTimestamp?: Date | null;
   archivedAt?: Date | null;
   parentAgentId: string | null;
+  dependsOn?: string[];
   labels: Record<string, string>;
   projectPlacement?: ProjectPlacementPayload | null;
 }

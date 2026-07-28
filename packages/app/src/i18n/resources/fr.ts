@@ -1584,6 +1584,9 @@ export const fr: TranslationResources = {
     showListTooltip: "Switch to the compact subagent list inside this session",
     showBoardAction: "Show board",
     showBoardTooltip: "Show live subagent cards inside this session",
+    graphView: "Graph",
+    showGraphAction: "Show graph",
+    showGraphTooltip: "Show the swarm collaboration graph",
     empty: "Aucun sous-agent pour le moment",
     toolCalls: "{{count}} appels d'outils",
     status: {

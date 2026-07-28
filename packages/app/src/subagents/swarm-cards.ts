@@ -22,6 +22,7 @@ export interface SwarmCardViewModel {
   kind: "paseo" | "provider";
   subagentId: string;
   parentAgentId: string;
+  dependsOn?: string[];
   provider: ProviderSubagentDescriptorPayload["provider"];
   title: string;
   description: string | null;
@@ -286,6 +287,7 @@ function buildPaseoSwarmCards(input: BuildSwarmCardViewModelsInput): SwarmCardVi
       kind: "paseo",
       subagentId: agent.id,
       parentAgentId: agent.parentAgentId ?? input.parentAgentId,
+      dependsOn: agent.dependsOn,
       provider: agent.provider,
       title: agent.title?.trim() || FALLBACK_TITLE,
       description: null,
