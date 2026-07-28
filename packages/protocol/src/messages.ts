@@ -712,6 +712,8 @@ export const AgentSnapshotPayloadSchema = z.object({
   lastError: z.string().optional(),
   title: z.string().nullable(),
   labels: z.record(z.string(), z.string()).default({}),
+  // COMPAT(dependsOn): agent dependency DAG for deferred initial prompts (MCP create_agent).
+  dependsOn: z.array(z.string()).optional(),
   requiresAttention: z.boolean().optional(),
   attentionReason: z.enum(["finished", "error", "permission"]).nullable().optional(),
   attentionTimestamp: z.string().nullable().optional(),

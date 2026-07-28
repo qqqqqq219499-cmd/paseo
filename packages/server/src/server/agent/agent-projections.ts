@@ -80,6 +80,7 @@ export function toStoredAgentRecord(
     lastUserMessageAt: agent.lastUserMessageAt ? agent.lastUserMessageAt.toISOString() : null,
     title: options?.title ?? null,
     labels: agent.labels,
+    ...(agent.dependsOn && agent.dependsOn.length > 0 ? { dependsOn: agent.dependsOn } : {}),
     lastStatus: agent.lifecycle,
     lastModeId: agent.currentModeId ?? config?.modeId ?? null,
     config: config ?? null,
@@ -129,6 +130,7 @@ export function toAgentPayload(
     persistence: sanitizePersistenceHandle(agent.persistence),
     title: options?.title ?? null,
     labels: agent.labels,
+    ...(agent.dependsOn && agent.dependsOn.length > 0 ? { dependsOn: [...agent.dependsOn] } : {}),
   };
 
   const usage = sanitizeUsage(agent.lastUsage);

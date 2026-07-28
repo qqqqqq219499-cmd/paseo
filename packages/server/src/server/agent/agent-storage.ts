@@ -44,6 +44,18 @@ const STORED_AGENT_SCHEMA = z.object({
   lastUserMessageAt: z.string().nullable().optional(),
   title: z.string().nullable().optional(),
   labels: z.record(z.string(), z.string()).default({}),
+  // COMPAT(dependsOn): deferred MCP create_agent dependency DAG.
+  dependsOn: z.array(z.string()).optional(),
+  // Internal scheduling markers (not projected to client snapshots).
+  dependencyFiredAt: z.string().optional(),
+  dependencyFailed: z
+    .object({
+      reason: z.string(),
+      at: z.string(),
+    })
+    .optional(),
+  // Deferred initial prompt text while waiting on dependsOn (not in snapshots).
+  dependencyPendingPrompt: z.string().optional(),
   lastStatus: AgentStatusSchema.default("closed"),
   lastModeId: z.string().nullable().optional(),
   config: SERIALIZABLE_CONFIG_SCHEMA,
@@ -82,6 +94,39 @@ export type SerializableAgentConfig = Pick<
 export type StoredAgentRecord = z.infer<typeof STORED_AGENT_SCHEMA>;
 export function parseStoredAgentRecord(value: unknown): StoredAgentRecord {
   return STORED_AGENT_SCHEMA.parse(value);
+}
+
+function preserveNonLiveAgentFields(
+  record: StoredAgentRecord,
+  existing: StoredAgentRecord | null,
+): void {
+  if (!existing) {
+    return;
+  }
+  // Preserve soft-delete/archive status across snapshot flushes.
+  // `archivedAt` is not part of the ManagedAgent snapshot, so a naive projection
+  // would wipe it during normal persistence (including on daemon restart).
+  if (existing.archivedAt !== undefined) {
+    record.archivedAt = existing.archivedAt;
+  }
+  // Preserve dependency scheduling markers (also not on ManagedAgent live fields).
+  if (existing.dependencyFiredAt !== undefined) {
+    record.dependencyFiredAt = existing.dependencyFiredAt;
+  }
+  if (existing.dependencyFailed !== undefined) {
+    record.dependencyFailed = existing.dependencyFailed;
+  }
+  if (existing.dependencyPendingPrompt !== undefined) {
+    record.dependencyPendingPrompt = existing.dependencyPendingPrompt;
+  }
+  // Keep dependsOn from existing if live agent somehow lacks it (reload paths).
+  if (
+    (record.dependsOn === undefined || record.dependsOn.length === 0) &&
+    existing.dependsOn &&
+    existing.dependsOn.length > 0
+  ) {
+    record.dependsOn = existing.dependsOn;
+  }
 }
 
 export class AgentStorage {
@@ -219,12 +264,7 @@ export class AgentStorage {
       internal: hasInternalOverride ? options?.internal : (agent.internal ?? existing?.internal),
     });
 
-    // Preserve soft-delete/archive status across snapshot flushes.
-    // `archivedAt` is not part of the ManagedAgent snapshot, so a naive projection
-    // would wipe it during normal persistence (including on daemon restart).
-    if (existing && existing.archivedAt !== undefined) {
-      record.archivedAt = existing.archivedAt;
-    }
+    preserveNonLiveAgentFields(record, existing);
     await this.upsert(record);
   }
 

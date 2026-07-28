@@ -17,6 +17,11 @@ import type { AgentStorage } from "../agent-storage.js";
 import type { AgentOwner } from "../agent-owner.js";
 import type { ProviderSnapshotManager } from "../provider-snapshot-manager.js";
 import { setupFinishNotification, startCreatedAgentInitialPrompt } from "../agent-prompt.js";
+import {
+  normalizeDependsOn,
+  scheduleDependentAgent,
+  validateDependsOn,
+} from "../dependency-scheduler.js";
 import { resolveCreateAgentTitles } from "../create-agent-title.js";
 import { buildAgentPrompt } from "../prompt-attachments.js";
 import { normalizeClientMessageId, resolveClientMessageId } from "../../client-message-id.js";
@@ -105,6 +110,8 @@ export interface CreateAgentFromMcpInput {
   }) => void;
   onWorktreeCreated?: (createdWorktree: CreatePaseoWorktreeWorkflowResult) => void;
   callerAgentId?: string;
+  /** Agents that must finish a turn before this agent receives its initial prompt. */
+  dependsOn?: string[];
   callerContext?: {
     lockedCwd?: string;
     allowCustomCwd?: boolean;
@@ -173,6 +180,77 @@ interface ResolvedCreateAgent {
   createdWorktree?: CreatePaseoWorktreeWorkflowResult;
 }
 
+async function prepareDeferredDependsOn(
+  dependencies: CreateAgentCommandDependencies,
+  input: CreateAgentCommandInput,
+): Promise<string[]> {
+  if (input.kind !== "mcp") {
+    return [];
+  }
+  const deferredDependsOn = normalizeDependsOn(input.dependsOn);
+  if (deferredDependsOn.length === 0) {
+    return [];
+  }
+  await validateDependsOn({
+    dependentAgentId: "pending",
+    dependsOn: deferredDependsOn,
+    agentStorage: dependencies.agentStorage,
+    agentManager: dependencies.agentManager,
+  });
+  return deferredDependsOn;
+}
+
+async function deferOrSendInitialPrompt(params: {
+  dependencies: CreateAgentCommandDependencies;
+  input: CreateAgentCommandInput;
+  resolved: ResolvedCreateAgent;
+  snapshot: ManagedAgent;
+  deferredDependsOn: string[];
+}): Promise<{
+  liveSnapshot: ManagedAgent;
+  initialPromptStarted: boolean;
+  initialPromptError: unknown | null;
+}> {
+  const { dependencies, input, resolved, snapshot, deferredDependsOn } = params;
+  const deferInitialPrompt =
+    input.kind === "mcp" && deferredDependsOn.length > 0 && resolved.prompt !== undefined;
+
+  if (deferInitialPrompt) {
+    const promptText =
+      typeof resolved.prompt === "string" ? resolved.prompt : String(resolved.prompt);
+    const stored = await dependencies.agentStorage.get(snapshot.id);
+    if (stored) {
+      await dependencies.agentStorage.upsert({
+        ...stored,
+        dependsOn: deferredDependsOn,
+        dependencyPendingPrompt: promptText,
+      });
+    }
+    scheduleDependentAgent({
+      agentManager: dependencies.agentManager,
+      agentStorage: dependencies.agentStorage,
+      logger: dependencies.logger,
+      dependentAgentId: snapshot.id,
+      dependsOn: deferredDependsOn,
+      initialPrompt: promptText,
+      callerAgentId: input.kind === "mcp" ? input.callerAgentId : undefined,
+      notifyOnFinish: input.kind === "mcp" ? input.notifyOnFinish : false,
+    });
+    return { liveSnapshot: snapshot, initialPromptStarted: false, initialPromptError: null };
+  }
+
+  if (resolved.prompt !== undefined) {
+    const sendResult = await sendInitialPrompt(dependencies, resolved, snapshot);
+    return {
+      liveSnapshot: sendResult.liveSnapshot,
+      initialPromptStarted: sendResult.started,
+      initialPromptError: sendResult.error ?? null,
+    };
+  }
+
+  return { liveSnapshot: snapshot, initialPromptStarted: false, initialPromptError: null };
+}
+
 export async function createAgentCommand(
   dependencies: CreateAgentCommandDependencies,
   input: CreateAgentCommandInput,
@@ -182,19 +260,21 @@ export async function createAgentCommand(
       ? await resolveSessionCreateAgent(dependencies, input)
       : await resolveMcpCreateAgent(dependencies, input);
 
-  const snapshot = await dependencies.agentManager.createAgent(
-    resolved.config,
-    undefined,
-    resolved.createOptions,
-  );
+  const deferredDependsOn = await prepareDeferredDependsOn(dependencies, input);
+
+  const snapshot = await dependencies.agentManager.createAgent(resolved.config, undefined, {
+    ...resolved.createOptions,
+    ...(deferredDependsOn.length > 0 ? { dependsOn: deferredDependsOn } : {}),
+  });
+
+  if (deferredDependsOn.includes(snapshot.id)) {
+    throw new Error(`dependsOn cannot include the agent itself (${snapshot.id})`);
+  }
 
   resolved.setupContinuation?.startAfterAgentCreate({
     agentId: snapshot.id,
   });
 
-  let liveSnapshot = snapshot;
-  let initialPromptStarted = false;
-  let initialPromptError: unknown | null = null;
   if (input.kind === "mcp") {
     input.onCreated?.({ agentId: snapshot.id, createdWorktree: resolved.createdWorktree ?? null });
     if (input.autoArchive === true) {
@@ -213,12 +293,10 @@ export async function createAgentCommand(
       });
     }
   }
-  if (resolved.prompt !== undefined) {
-    const sendResult = await sendInitialPrompt(dependencies, resolved, snapshot);
-    initialPromptStarted = sendResult.started;
-    liveSnapshot = sendResult.liveSnapshot;
-    initialPromptError = sendResult.error ?? null;
-  }
+
+  const { liveSnapshot, initialPromptStarted, initialPromptError } = await deferOrSendInitialPrompt(
+    { dependencies, input, resolved, snapshot, deferredDependsOn },
+  );
 
   if (input.kind === "mcp" && input.notifyOnFinish && input.callerAgentId && initialPromptStarted) {
     setupFinishNotification({

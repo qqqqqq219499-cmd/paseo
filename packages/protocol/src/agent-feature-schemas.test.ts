@@ -144,6 +144,38 @@ describe("agent feature schemas", () => {
     expect(parsed.features?.[0]?.id).toBe("fast_mode");
   });
 
+  it("accepts optional dependsOn on agent snapshot payloads", () => {
+    const parsed = AgentSnapshotPayloadSchema.parse({
+      id: "agent-dep",
+      provider: "codex",
+      cwd: "/tmp/project",
+      model: "gpt-5",
+      thinkingOptionId: null,
+      effectiveThinkingOptionId: null,
+      createdAt: "2026-04-03T12:00:00.000Z",
+      updatedAt: "2026-04-03T12:00:00.000Z",
+      lastUserMessageAt: null,
+      status: "idle",
+      capabilities: {
+        supportsStreaming: true,
+        supportsSessionPersistence: true,
+        supportsDynamicModes: true,
+        supportsMcpServers: true,
+        supportsReasoningStream: true,
+        supportsToolInvocations: true,
+      },
+      currentModeId: null,
+      availableModes: [],
+      pendingPermissions: [],
+      persistence: null,
+      title: null,
+      labels: {},
+      dependsOn: ["upstream-a", "upstream-b"],
+    });
+
+    expect(parsed.dependsOn).toEqual(["upstream-a", "upstream-b"]);
+  });
+
   it("defaults missing rewind capabilities to false", () => {
     const parsed = AgentSnapshotPayloadSchema.parse({
       id: "agent-123",

@@ -247,6 +247,8 @@ export interface CreateAgentOptions {
   // undefined is an explicit decision: the agent never appears in the sidebar.
   workspaceId: string | undefined;
   owner?: AgentOwner;
+  // COMPAT(dependsOn): agents that must finish before this agent starts.
+  dependsOn?: string[];
 }
 
 export interface AgentManagerOptions {
@@ -354,6 +356,10 @@ interface ManagedAgentBase {
    * User-defined labels for categorizing agents (e.g., { surface: "workspace" }).
    */
   labels: Record<string, string>;
+  /**
+   * Agent ids that must complete a turn before this agent receives its initial prompt.
+   */
+  dependsOn?: string[];
 }
 
 type ManagedAgentWithSession = ManagedAgentBase & {
@@ -1067,6 +1073,7 @@ export class AgentManager {
       initialTitle: options.initialTitle,
       workspaceId: options.workspaceId,
       owner: options.owner,
+      dependsOn: options.dependsOn,
     });
   }
 
@@ -1306,6 +1313,7 @@ export class AgentManager {
         lastUsage: preservedLastUsage,
         lastError: preservedLastError,
         attention: preservedAttention,
+        dependsOn: existing.dependsOn,
       });
     } finally {
       if (!handedToRegistration) {
@@ -1669,6 +1677,9 @@ export class AgentManager {
         attention: { requiresAttention: false },
         internal: record.internal,
         labels: record.labels,
+        ...(record.dependsOn && record.dependsOn.length > 0
+          ? { dependsOn: [...record.dependsOn] }
+          : {}),
       },
     });
   }
@@ -2554,10 +2565,34 @@ export class AgentManager {
   async getLastAssistantMessage(agentId: string): Promise<string | null> {
     const agent = this.agents.get(agentId);
     if (!agent) {
+      // Fall through to durable store so dependency injection can still read
+      // archived/closed upstream outputs after restart.
+      if (this.durableTimelineStore) {
+        return await this.durableTimelineStore.getLastAssistantMessage(agentId);
+      }
       return null;
     }
 
     return await this.getLastAssistantMessageFromStores(agentId);
+  }
+
+  /**
+   * True when the agent has already finished at least one turn with assistant output.
+   * Used by dependency scheduling after daemon restart (no running→idle edge available).
+   * Timeline items do not carry turn_completed stream events; assistant_message is the signal.
+   */
+  async agentHasCompletedTurn(agentId: string): Promise<boolean> {
+    const live = this.timelineStore.getItems(agentId);
+    if (live.some((item) => item.type === "assistant_message")) {
+      return true;
+    }
+    if (this.durableTimelineStore) {
+      const message = await this.durableTimelineStore.getLastAssistantMessage(agentId);
+      if (message && message.trim().length > 0) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private getLastAssistantMessageFromTimeline(
@@ -2811,6 +2846,7 @@ export class AgentManager {
       publishWhenReady?: boolean;
       workspaceId?: string;
       owner?: AgentOwner;
+      dependsOn?: string[];
     },
   ): Promise<ManagedAgent> {
     let registered = false;
@@ -2841,6 +2877,9 @@ export class AgentManager {
         durableTimelineHasRows,
         options,
       });
+      if (options?.dependsOn && options.dependsOn.length > 0) {
+        managed.dependsOn = [...options.dependsOn];
+      }
 
       this.assertAcceptingAgentRegistrations();
       this.agents.set(resolvedAgentId, managed);
@@ -2950,11 +2989,12 @@ export class AgentManager {
           persistence?: AgentPersistenceHandle;
           workspaceId?: string;
           owner?: AgentOwner;
+          dependsOn?: string[];
         }
       | undefined;
   }): ActiveManagedAgent {
     const { resolvedAgentId, session, config, now, durableTimelineHasRows, options } = params;
-    return {
+    const managed = {
       id: resolvedAgentId,
       provider: config.provider,
       cwd: config.cwd,
@@ -2964,7 +3004,7 @@ export class AgentManager {
       capabilities: session.capabilities,
       config,
       runtimeInfo: undefined,
-      lifecycle: "initializing",
+      lifecycle: "initializing" as const,
       createdAt: options?.createdAt ?? now,
       updatedAt: options?.updatedAt ?? now,
       availableModes: [],
@@ -2989,6 +3029,7 @@ export class AgentManager {
       internal: config.internal ?? false,
       labels: options?.labels ?? {},
     } as ActiveManagedAgent;
+    return managed;
   }
 
   private async loadCommittedTimelineSeed(

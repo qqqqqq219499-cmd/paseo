@@ -535,6 +535,56 @@ function resolveTerminalKeyToken(key: string, literal: boolean): string {
   }
 }
 
+function buildMcpCreateAgentToolInput(params: {
+  parsedArgs: {
+    provider: string;
+    title: string;
+    initialPrompt: string;
+    settings?: { thinkingOptionId?: string; features?: Record<string, unknown>; modeId?: string };
+    labels?: Record<string, string>;
+    dependsOn?: string[];
+    autoArchive?: boolean;
+  };
+  resolvedArgs: {
+    kind: string;
+    cwd?: string;
+    workspaceId?: string;
+    detached?: boolean;
+  };
+  requestedBackground: boolean;
+  notifyOnFinish: boolean;
+  callerAgentId?: string;
+  callerContext: unknown;
+  worktree: unknown;
+}): CreateAgentFromMcpInput {
+  const { parsedArgs, resolvedArgs } = params;
+  const input: CreateAgentFromMcpInput = {
+    kind: "mcp",
+    provider: parsedArgs.provider,
+    title: parsedArgs.title,
+    initialPrompt: parsedArgs.initialPrompt,
+    cwd: resolvedArgs.cwd,
+    workspaceId: resolvedArgs.workspaceId,
+    thinking: parsedArgs.settings?.thinkingOptionId,
+    features: parsedArgs.settings?.features,
+    labels: parsedArgs.labels,
+    mode: parsedArgs.settings?.modeId,
+    background: params.requestedBackground,
+    notifyOnFinish: params.notifyOnFinish,
+    detached: resolvedArgs.detached,
+    callerAgentId: params.callerAgentId,
+    callerContext: params.callerContext as CreateAgentFromMcpInput["callerContext"],
+    worktree: params.worktree as CreateAgentFromMcpInput["worktree"],
+  };
+  if (resolvedArgs.kind === "agent-scoped" && "autoArchive" in parsedArgs) {
+    input.autoArchive = parsedArgs.autoArchive;
+  }
+  if (parsedArgs.dependsOn) {
+    input.dependsOn = parsedArgs.dependsOn;
+  }
+  return input;
+}
+
 export function createPaseoToolCatalog(options: PaseoToolHostDependencies): PaseoToolCatalog {
   const {
     agentManager,
@@ -984,6 +1034,12 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
       .trim()
       .min(1, "initialPrompt is required")
       .describe("Required first task to run immediately after creation."),
+    dependsOn: z
+      .array(z.string())
+      .optional()
+      .describe(
+        "这些 agent 完成本轮后本 agent 才启动；启动时自动注入各依赖的最终产出摘要。被依赖的 agent 建议 autoArchive=false",
+      ),
   };
   const legacyCreateAgentPlacementFields = {
     relationship: AgentRelationshipInputSchema.describe(
@@ -1428,6 +1484,15 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         requestedBackground = resolvedArgs.parsedArgs.background;
         notifyOnFinish = resolvedArgs.parsedArgs.notifyOnFinish ?? false;
       }
+      const createInput = buildMcpCreateAgentToolInput({
+        parsedArgs,
+        resolvedArgs,
+        requestedBackground,
+        notifyOnFinish,
+        callerAgentId,
+        callerContext,
+        worktree,
+      });
       const {
         snapshot,
         background: createdInBackground,
@@ -1446,27 +1511,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
             ? { ensureWorkspaceForCreate: options.ensureWorkspaceForCreate }
             : {}),
         },
-        {
-          kind: "mcp",
-          provider: parsedArgs.provider,
-          title: parsedArgs.title,
-          initialPrompt: parsedArgs.initialPrompt,
-          cwd: resolvedArgs.cwd,
-          workspaceId: resolvedArgs.workspaceId,
-          thinking: parsedArgs.settings?.thinkingOptionId,
-          features: parsedArgs.settings?.features,
-          labels: parsedArgs.labels,
-          mode: parsedArgs.settings?.modeId,
-          background: requestedBackground,
-          notifyOnFinish,
-          ...(resolvedArgs.kind === "agent-scoped" && "autoArchive" in parsedArgs
-            ? { autoArchive: parsedArgs.autoArchive }
-            : {}),
-          detached: resolvedArgs.detached,
-          callerAgentId,
-          callerContext,
-          worktree,
-        },
+        createInput,
       );
 
       try {
@@ -1502,10 +1547,18 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
 
       // Return immediately for async creation.
       const currentSnapshot = agentManager.getAgent(snapshot.id) ?? snapshot;
-      const guidance =
-        callerAgentId && notifyOnFinish && initialPromptStarted
-          ? "You will get notified when the created agent finishes, errors, or needs permission. Do not poll for status; continue with other work until the notification arrives."
-          : undefined;
+      const deferredDeps =
+        "dependsOn" in parsedArgs && Array.isArray(parsedArgs.dependsOn)
+          ? parsedArgs.dependsOn
+          : [];
+      let guidance: string | undefined;
+      if (deferredDeps.length > 0 && !initialPromptStarted) {
+        guidance =
+          "This agent is waiting on dependsOn. It will start automatically after those agents finish their current turn; dependency outputs will be injected into its initial prompt.";
+      } else if (callerAgentId && notifyOnFinish && initialPromptStarted) {
+        guidance =
+          "You will get notified when the created agent finishes, errors, or needs permission. Do not poll for status; continue with other work until the notification arrives.";
+      }
       const response = {
         content: [],
         structuredContent: ensureValidJson({
