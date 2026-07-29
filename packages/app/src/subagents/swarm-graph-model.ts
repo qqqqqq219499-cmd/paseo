@@ -19,6 +19,9 @@ export interface SwarmGraph {
   edges: Edge[];
 }
 
+/** xyflow custom node type; the view registers its renderer under this key. */
+export const SWARM_GRAPH_NODE_TYPE = "swarm";
+
 const DEFAULT_DIRECTION = "LR" as const;
 const DEFAULT_NODE_WIDTH = 260;
 const DEFAULT_NODE_HEIGHT = 96;
@@ -40,6 +43,7 @@ export function buildSwarmGraph(input: {
   const nodes: Node<SwarmGraphNodeData>[] = [
     {
       id: rootId,
+      type: SWARM_GRAPH_NODE_TYPE,
       position: { x: 0, y: 0 },
       data: {
         card: null,
@@ -58,6 +62,7 @@ export function buildSwarmGraph(input: {
   for (const card of cards) {
     nodes.push({
       id: card.key,
+      type: SWARM_GRAPH_NODE_TYPE,
       position: { x: 0, y: 0 },
       data: {
         card,

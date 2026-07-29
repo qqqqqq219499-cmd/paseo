@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { SwarmCardViewModel } from "./swarm-cards";
-import { buildSwarmGraph, layoutSwarmGraph } from "./swarm-graph-model";
+import { buildSwarmGraph, layoutSwarmGraph, SWARM_GRAPH_NODE_TYPE } from "./swarm-graph-model";
 
 const ROOT_ID = "parent-1";
 const ROOT_TITLE = "Parent Agent";
@@ -45,6 +45,18 @@ describe("buildSwarmGraph", () => {
       },
     });
     expect(graph.edges).toEqual([]);
+  });
+
+  test("every node carries the custom xyflow node type (else ReactFlow renders empty default nodes)", () => {
+    const graph = buildSwarmGraph({
+      cards: [makeCard({ key: "card-a", subagentId: "a" })],
+      rootAgentId: ROOT_ID,
+      rootTitle: ROOT_TITLE,
+    });
+
+    for (const node of graph.nodes) {
+      expect(node.type).toBe(SWARM_GRAPH_NODE_TYPE);
+    }
   });
 
   test("three flat children all link to root; only running edges are animated", () => {

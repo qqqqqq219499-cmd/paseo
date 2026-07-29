@@ -34,6 +34,7 @@ import {
 import {
   buildSwarmGraph,
   layoutSwarmGraph,
+  SWARM_GRAPH_NODE_TYPE,
   type SwarmGraphNodeData,
 } from "@/subagents/swarm-graph-model";
 
@@ -319,7 +320,7 @@ function SwarmGraphNode({ data }: NodeProps<Node<SwarmGraphNodeData>>): ReactEle
 }
 
 const nodeTypes = {
-  swarm: SwarmGraphNode,
+  [SWARM_GRAPH_NODE_TYPE]: SwarmGraphNode,
 };
 
 export function SwarmGraphView({
