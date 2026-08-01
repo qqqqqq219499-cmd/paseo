@@ -1,5 +1,9 @@
 import type { AgentFeature, AgentModelDefinition } from "@getpaseo/protocol/agent-types";
 import { i18n } from "@/i18n/i18next";
+import { formatThinkingOptionLabel } from "@/agent-controls/labels";
+import { FAST_MODE_FEATURE_ID, PLAN_MODE_FEATURE_ID } from "@/agent-controls/policy";
+
+export { formatAgentModeLabel, formatThinkingOptionLabel } from "@/agent-controls/labels";
 
 export type ExplainedAgentControl = "mode" | "model" | "thinking";
 export type FeatureHighlightColor = "blue" | "default" | "green" | "yellow";
@@ -35,66 +39,15 @@ export function getFeatureTooltip(feature: Pick<AgentFeature, "label" | "tooltip
 
 export function getFeatureHighlightColor(featureId: string): FeatureHighlightColor {
   switch (featureId) {
-    case "fast_mode":
+    case FAST_MODE_FEATURE_ID:
       return "yellow";
     case "auto_accept":
       return "green";
-    case "plan_mode":
+    case PLAN_MODE_FEATURE_ID:
       return "blue";
     default:
       return "default";
   }
-}
-
-interface ControlLabelInput {
-  id: string;
-  label?: string | null;
-}
-
-function sentenceCase(value: string): string {
-  if (!value) {
-    return value;
-  }
-  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
-}
-
-function splitCompactLabel(value: string, splitHyphen: boolean): string {
-  const separatorPattern = splitHyphen ? /[_-]+/g : /_+/g;
-
-  return value
-    .replace(separatorPattern, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function formatControlLabel(option: ControlLabelInput, splitHyphen: boolean): string {
-  const rawLabel = (option.label ?? option.id).trim();
-  return sentenceCase(splitCompactLabel(rawLabel, splitHyphen));
-}
-
-export function formatAgentModeLabel(mode: ControlLabelInput): string {
-  return formatControlLabel(mode, mode.label == null);
-}
-
-const THINKING_LEVEL_IDS = ["low", "medium", "high", "xhigh", "max"] as const;
-
-function asThinkingLevelId(value: string): (typeof THINKING_LEVEL_IDS)[number] | null {
-  const compact = value.replace(/[\s_-]+/g, "").toLowerCase();
-  if (compact === "extrahigh") return "xhigh";
-  return (THINKING_LEVEL_IDS as readonly string[]).includes(compact)
-    ? (compact as (typeof THINKING_LEVEL_IDS)[number])
-    : null;
-}
-
-export function formatThinkingOptionLabel(option: ControlLabelInput): string {
-  const rawLabel = (option.label ?? option.id).trim();
-  const level = asThinkingLevelId(option.id) ?? asThinkingLevelId(rawLabel);
-  if (level) {
-    return i18n.t(`agentControls.thinking.levels.${level}`);
-  }
-  return formatControlLabel(option, true);
 }
 
 function findModelById(

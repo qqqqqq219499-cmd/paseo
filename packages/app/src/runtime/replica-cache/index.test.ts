@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { WorkspaceDescriptorPayload } from "@getpaseo/protocol/messages";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import {
-  normalizeEmptyProjectDescriptor,
+  normalizeProjectDescriptor,
   normalizeWorkspaceDescriptor,
   useSessionStore,
 } from "@/stores/session-store";
@@ -94,10 +94,26 @@ function seedSession(): void {
   store.setAgents(SERVER_ID, new Map([["agent-1", agent("agent-1")]]));
   store.setWorkspaces(
     SERVER_ID,
-    new Map([["workspace-1", normalizeWorkspaceDescriptor(workspace())]]),
+    new Map([
+      [
+        "workspace-1",
+        normalizeWorkspaceDescriptor({
+          ...workspace(),
+          workspaceKind: "worktree",
+          worktreeSlug: "owned-worktree",
+        }),
+      ],
+    ]),
   );
-  store.setEmptyProjects(SERVER_ID, [
-    normalizeEmptyProjectDescriptor({
+  store.setProjects(SERVER_ID, [
+    normalizeProjectDescriptor({
+      projectId: "project-1",
+      projectKey: "remote:github.com/getpaseo/paseo",
+      projectDisplayName: "Paseo",
+      projectRootPath: "/repo/paseo",
+      projectKind: "git",
+    }),
+    normalizeProjectDescriptor({
       projectId: "empty-project",
       projectDisplayName: "Empty project",
       projectRootPath: "/repo/empty",
@@ -162,9 +178,10 @@ describe("ReplicaCache", () => {
     expect(session?.hasHydratedWorkspaces).toBe(false);
     expect(Array.from(session?.agents.keys() ?? [])).toEqual(["agent-1"]);
     expect(Array.from(session?.workspaces.keys() ?? [])).toEqual(["workspace-1"]);
-    expect(Array.from(session?.emptyProjects.keys() ?? [])).toEqual([]);
+    expect(Array.from(session?.projects.keys() ?? [])).toEqual(["project-1"]);
     expect(session?.agents.get("agent-1")?.updatedAt).toBeInstanceOf(Date);
     expect(session?.workspaces.get("workspace-1")?.statusEnteredAt).toBeInstanceOf(Date);
+    expect(session?.workspaces.get("workspace-1")?.worktreeSlug).toBe("owned-worktree");
     expect(session?.agentStreamTail.get("agent-1")).toEqual([message("message-1", "Cached")]);
     expect(session?.agentAuthoritativeHistoryApplied.get("agent-1")).toBe(true);
     expect(session?.agentTimelineCursor.get("agent-1")).toEqual({
@@ -213,7 +230,7 @@ describe("ReplicaCache", () => {
     const timelines = session?.agentStreamTail;
     expect(Array.from(session?.agents.keys() ?? [])).toEqual(["agent-2"]);
     expect(Array.from(session?.workspaces.keys() ?? [])).toEqual(["workspace-2"]);
-    expect(Array.from(session?.emptyProjects.keys() ?? [])).toEqual([]);
+    expect(Array.from(session?.projects.keys() ?? [])).toEqual(["project-2"]);
     expect(Array.from(timelines?.keys() ?? [])).toEqual(["agent-2"]);
     expect(timelines?.get("agent-2")).toEqual(secondTimeline.slice(-50));
   });

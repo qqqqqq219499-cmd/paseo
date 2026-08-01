@@ -68,6 +68,7 @@ import { getIsElectron } from "@/constants/platform";
 import { useOwnsWindowChromeCorner, WindowChromeSafeArea } from "@/utils/desktop-window";
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
+import { useIsMobilePanelPresented } from "@/mobile-panels/provider";
 import {
   buildOpenProjectRoute,
   buildNewWorkspaceRoute,
@@ -90,7 +91,7 @@ interface SidebarSharedProps {
   pinnedGroups: PinnedSidebarGroups;
   projects: SidebarProjectEntry[];
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
-  projectNamesByKey: Map<string, string>;
+  projectNamesByViewKey: Map<string, string>;
   isInitialLoad: boolean;
   isRevalidating: boolean;
   isManualRefresh: boolean;
@@ -100,7 +101,7 @@ interface SidebarSharedProps {
   isNewThemeSidebar: boolean;
   collapsedProjectKeys: ReadonlySet<string>;
   shortcutIndexByWorkspaceKey: Map<string, number>;
-  toggleProjectCollapsed: (projectKey: string) => void;
+  toggleProjectCollapsed: (projectViewKey: string) => void;
   handleRefresh: () => void;
   handleNewWorkspaceNavigate: () => void;
   /** Multi-host flat list: start a new conversation on a specific host. */
@@ -161,7 +162,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
   const {
     projects,
     workspaceEntriesByKey,
-    projectNamesByKey,
+    projectNamesByViewKey,
     isInitialLoad,
     isRevalidating,
     refreshAll,
@@ -282,7 +283,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
     pinnedGroups,
     projects,
     workspaceEntriesByKey,
-    projectNamesByKey,
+    projectNamesByViewKey,
     isInitialLoad,
     isRevalidating,
     isManualRefresh,
@@ -646,7 +647,7 @@ function MobileSidebar({
   pinnedGroups,
   projects,
   workspaceEntriesByKey,
-  projectNamesByKey,
+  projectNamesByViewKey,
   isInitialLoad,
   isRevalidating,
   isManualRefresh,
@@ -688,6 +689,7 @@ function MobileSidebar({
     }),
     [labels],
   );
+  const dragGestureHostPresented = useIsMobilePanelPresented("agent-list");
 
   const handleViewMore = useCallback(() => {
     closeSidebar();
@@ -818,12 +820,13 @@ function MobileSidebar({
                 pinnedGroups={pinnedGroups}
                 projects={projects}
                 workspaceEntriesByKey={workspaceEntriesByKey}
-                projectNamesByKey={projectNamesByKey}
+                projectNamesByViewKey={projectNamesByViewKey}
                 isRefreshing={isManualRefresh && isRevalidating}
                 onRefresh={handleRefresh}
                 onWorkspacePress={handleWorkspacePress}
                 onAddProject={handleOpenProject}
                 parentGestureRef={closeGestureRef}
+                dragGestureHostPresented={dragGestureHostPresented}
                 listHeaderComponent={workspacesSectionHeaderElement}
               />
             )}
@@ -851,7 +854,7 @@ function DesktopSidebar({
   pinnedGroups,
   projects,
   workspaceEntriesByKey,
-  projectNamesByKey,
+  projectNamesByViewKey,
   isInitialLoad,
   isRevalidating,
   isManualRefresh,
@@ -969,7 +972,7 @@ function DesktopSidebar({
         pinnedGroups={pinnedGroups}
         projects={projects}
         workspaceEntriesByKey={workspaceEntriesByKey}
-        projectNamesByKey={projectNamesByKey}
+        projectNamesByViewKey={projectNamesByViewKey}
         isRefreshing={isManualRefresh && isRevalidating}
         onRefresh={handleRefresh}
         onAddProject={handleOpenProject}

@@ -1,7 +1,7 @@
 import type { TFunction } from "i18next";
 
 import type { AgentFeature } from "@getpaseo/protocol/agent-types";
-import { formatThinkingOptionLabel } from "./utils";
+import { formatThinkingOptionLabel } from "@/agent-controls/labels";
 
 /**
  * Server-provided agent features and thinking options carry English labels.

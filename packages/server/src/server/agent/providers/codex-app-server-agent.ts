@@ -970,8 +970,8 @@ function buildPlanPermissionActions(options?: {
 }): AgentPermissionAction[] {
   const actions: AgentPermissionAction[] = [
     {
-      id: "reject",
-      label: "Reject",
+      id: "dismiss",
+      label: "Dismiss",
       behavior: "deny",
       variant: "danger",
       intent: "dismiss",
@@ -3110,6 +3110,13 @@ interface CodexSubAgentCallState {
   childThreadIds: Set<string>;
 }
 
+interface CodexPendingPermissionHandler {
+  resolve: (value: unknown) => void;
+  kind: "command" | "file" | "question" | "mcp_elicitation" | "plan";
+  questions?: CodexQuestionPrompt[];
+  planText?: string;
+}
+
 export class CodexAppServerAgentSession implements AgentSession {
   readonly provider = CODEX_PROVIDER;
   readonly capabilities = CODEX_APP_SERVER_CAPABILITIES;
@@ -3133,15 +3140,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private persistedProviderSubagentEvents: AgentStreamEvent[] = [];
   private pendingPermissions = new Map<string, AgentPermissionRequest>();
   private mcpElicitationPermissionIds = new Map<number, string>();
-  private pendingPermissionHandlers = new Map<
-    string,
-    {
-      resolve: (value: unknown) => void;
-      kind: "command" | "file" | "question" | "mcp_elicitation" | "plan";
-      questions?: CodexQuestionPrompt[];
-      planText?: string;
-    }
-  >();
+  private pendingPermissionHandlers = new Map<string, CodexPendingPermissionHandler>();
   private resolvedPermissionRequests = new Set<string>();
   private pendingAgentMessages = new Map<string, string>();
   private pendingReasoning = new Map<string, string[]>();
@@ -3448,6 +3447,8 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   private emitSyntheticPlanApprovalRequest(planText: string): void {
+    this.dismissPendingPlanApprovals("Superseded by a newer plan");
+
     const requestId = `permission-${randomUUID()}`;
     const request: AgentPermissionRequest = {
       id: requestId,
@@ -3855,30 +3856,31 @@ export class CodexAppServerAgentSession implements AgentSession {
       throw new Error("A foreground turn is already active");
     }
 
-    await this.connect();
-    if (!this.client) {
-      throw new Error("Codex client not initialized");
-    }
-
-    const slashCommand = await this.resolveSlashCommandInvocation(prompt);
-    const effectivePrompt = slashCommand
-      ? await this.buildCommandPromptInput(slashCommand.commandName, slashCommand.args)
-      : prompt;
-
-    if (this.currentThreadId) {
-      await this.ensureThreadLoaded();
-    } else {
-      await this.ensureThread();
-    }
-
-    const turnStart = await this.buildTurnStartParams(effectivePrompt, options);
-
-    const turnId = this.createTurnId();
-    this.activeForegroundTurnId = turnId;
-    this.activeClientMessageId = options?.clientMessageId ?? null;
-    this.currentTurnId = null;
+    this.dismissPendingPlanApprovals("Dismissed by a new prompt");
 
     try {
+      await this.connect();
+      if (!this.client) {
+        throw new Error("Codex client not initialized");
+      }
+
+      const slashCommand = await this.resolveSlashCommandInvocation(prompt);
+      const effectivePrompt = slashCommand
+        ? await this.buildCommandPromptInput(slashCommand.commandName, slashCommand.args)
+        : prompt;
+
+      if (this.currentThreadId) {
+        await this.ensureThreadLoaded();
+      } else {
+        await this.ensureThread();
+      }
+
+      const turnStart = await this.buildTurnStartParams(effectivePrompt, options);
+      const turnId = this.createTurnId();
+      this.activeForegroundTurnId = turnId;
+      this.activeClientMessageId = options?.clientMessageId ?? null;
+      this.currentTurnId = null;
+
       this.logTurnStartSummary({
         turnId,
         thinkingOptionId: turnStart.thinkingOptionId,
@@ -3889,13 +3891,12 @@ export class CodexAppServerAgentSession implements AgentSession {
         hasCodexConfig: turnStart.hasCodexConfig,
       });
       await this.client.request("turn/start", turnStart.params, TURN_START_TIMEOUT_MS);
+      return { turnId };
     } catch (error) {
       this.activeForegroundTurnId = null;
       this.activeClientMessageId = null;
       throw error;
     }
-
-    return { turnId };
   }
 
   private rememberCodexUserMessageTurn(messageId: string | null | undefined): boolean {
@@ -4146,12 +4147,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private handlePlanPermissionResponse(params: {
     requestId: string;
     response: AgentPermissionResponse;
-    pending: {
-      resolve: (value: unknown) => void;
-      kind: "command" | "file" | "question" | "mcp_elicitation" | "plan";
-      questions?: CodexQuestionPrompt[];
-      planText?: string;
-    };
+    pending: CodexPendingPermissionHandler;
     pendingRequest: AgentPermissionRequest | null;
   }): AgentPermissionResult | void {
     const { requestId, response, pending, pendingRequest } = params;
@@ -4162,6 +4158,23 @@ export class CodexAppServerAgentSession implements AgentSession {
       });
     }
 
+    this.resolvePlanPermission(requestId, response);
+    if (followUpPrompt) {
+      return { followUpPrompt };
+    }
+  }
+
+  private dismissPendingPlanApprovals(message: string): void {
+    const requestIds = Array.from(this.pendingPermissionHandlers)
+      .filter(([, pending]) => pending.kind === "plan")
+      .map(([requestId]) => requestId);
+
+    for (const requestId of requestIds) {
+      this.resolvePlanPermission(requestId, { behavior: "deny", message });
+    }
+  }
+
+  private resolvePlanPermission(requestId: string, resolution: AgentPermissionResponse): void {
     this.pendingPermissionHandlers.delete(requestId);
     this.pendingPermissions.delete(requestId);
     this.resolvedPermissionRequests.add(requestId);
@@ -4169,11 +4182,8 @@ export class CodexAppServerAgentSession implements AgentSession {
       type: "permission_resolved",
       provider: CODEX_PROVIDER,
       requestId,
-      resolution: response,
+      resolution,
     });
-    if (followUpPrompt) {
-      return { followUpPrompt };
-    }
   }
 
   private emitDeniedToolCallTimelineEvent(params: {

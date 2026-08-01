@@ -411,21 +411,6 @@ export interface AgentMetricsSnapshot {
   };
 }
 
-export interface IdleAgentCollectionEntry {
-  agentId: string;
-  provider: AgentProvider;
-  sessionId?: string;
-}
-
-export interface IdleAgentCollectionFailure extends IdleAgentCollectionEntry {
-  error: unknown;
-}
-
-export interface IdleAgentCollectionResult {
-  collected: IdleAgentCollectionEntry[];
-  failures: IdleAgentCollectionFailure[];
-}
-
 type ActiveManagedAgent =
   | ManagedAgentInitializing
   | ManagedAgentIdle
@@ -986,15 +971,6 @@ export class AgentManager {
     return agent ? { ...agent } : null;
   }
 
-  touchAgentActivity(id: string): ManagedAgent | null {
-    const agent = this.agents?.get(id);
-    if (!agent) {
-      return null;
-    }
-    this.touchUpdatedAt(agent);
-    return { ...agent };
-  }
-
   async waitForAgentClose(agentId: string): Promise<void> {
     await this.inFlightAgentCloses?.get(agentId)?.catch(() => undefined);
   }
@@ -1064,7 +1040,12 @@ export class AgentManager {
     const client = await this.requireAvailableClient({
       provider: storedConfig.provider,
     });
-    const launchContext = await this.buildLaunchContext(resolvedAgentId, client, options?.env);
+    const launchContext = await this.buildLaunchContext(
+      resolvedAgentId,
+      client,
+      storedConfig.cwd,
+      options?.env,
+    );
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
     const createOptions = this.buildCreateSessionOptions(options);
     const session = await client.createSession(providerLaunchConfig, launchContext, createOptions);
@@ -1143,7 +1124,7 @@ export class AgentManager {
         `Provider '${handle.provider}' is not available. Please ensure the CLI is installed.`,
       );
     }
-    const launchContext = await this.buildLaunchContext(resolvedAgentId, client);
+    const launchContext = await this.buildLaunchContext(resolvedAgentId, client, storedConfig.cwd);
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
     const session = await client.resumeSession(
       handle,
@@ -1190,7 +1171,7 @@ export class AgentManager {
       },
       resolvedAgentId,
     );
-    const launchContext = await this.buildLaunchContext(resolvedAgentId, client);
+    const launchContext = await this.buildLaunchContext(resolvedAgentId, client, storedConfig.cwd);
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
     const imported = await client.importSession(
       {
@@ -1271,7 +1252,7 @@ export class AgentManager {
       provider,
     } as AgentSessionConfig;
     const { storedConfig, launchConfig } = await this.prepareSessionConfig(refreshConfig, agentId);
-    const launchContext = await this.buildLaunchContext(agentId, client);
+    const launchContext = await this.buildLaunchContext(agentId, client, storedConfig.cwd);
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
 
     const session = handle
@@ -1498,66 +1479,6 @@ export class AgentManager {
       });
       this.dispatch({ type: "provider_subagent", event });
     }
-  }
-
-  async collectIdleAgents(options: {
-    cutoff: Date;
-    protectedAgentIds: ReadonlySet<string>;
-  }): Promise<IdleAgentCollectionResult> {
-    const result: IdleAgentCollectionResult = { collected: [], failures: [] };
-
-    for (const agent of Array.from(this.agents.values())) {
-      const current = this.agents.get(agent.id);
-      if (!current || !this.isIdleAgentCollectable(current, options)) {
-        continue;
-      }
-
-      const entry: IdleAgentCollectionEntry = {
-        agentId: current.id,
-        provider: current.provider,
-        ...(current.persistence?.sessionId ? { sessionId: current.persistence.sessionId } : {}),
-      };
-      try {
-        await this.closeAgent(current.id, { mode: "release" });
-        result.collected.push(entry);
-      } catch (error) {
-        result.failures.push({ ...entry, error });
-      }
-    }
-
-    return result;
-  }
-
-  private isIdleAgentCollectable(
-    agent: LiveManagedAgent,
-    options: { cutoff: Date; protectedAgentIds: ReadonlySet<string> },
-  ): agent is ManagedAgentIdle {
-    return (
-      agent.lifecycle === "idle" &&
-      agent.updatedAt.getTime() <= options.cutoff.getTime() &&
-      !agent.internal &&
-      !options.protectedAgentIds.has(agent.id) &&
-      agent.activeForegroundTurnId === null &&
-      !this.runs.hasRun(agent.id) &&
-      !agent.pendingReplacement &&
-      agent.pendingPermissions.size === 0 &&
-      agent.inFlightPermissionResponses.size === 0 &&
-      !this.hasRunningChild(agent.id)
-    );
-  }
-
-  private hasRunningChild(parentAgentId: string): boolean {
-    for (const agent of this.agents.values()) {
-      if (
-        agent.lifecycle === "running" &&
-        getParentAgentIdFromLabels(agent.labels) === parentAgentId
-      ) {
-        return true;
-      }
-    }
-    return this.providerSubagents
-      .list(parentAgentId)
-      .some((subagent) => subagent.status === "running");
   }
 
   async archiveAgent(agentId: string): Promise<{ archivedAt: string }> {
@@ -3733,7 +3654,12 @@ export class AgentManager {
       },
       "agent.manager.turn.completed",
     );
-    agent.lastUsage = event.usage;
+    if (event.usage) {
+      agent.lastUsage = { ...agent.lastUsage, ...event.usage };
+    }
+    // If no usage on turn_completed, keep lastUsage as-is so context window
+    // data accumulated during streaming isn't lost when the provider omits
+    // it from the completion event.
     agent.lastError = undefined;
     if (!isForegroundEvent && agent.lifecycle !== "idle" && !agent.pendingReplacement) {
       (agent as ActiveManagedAgent).lifecycle = "idle";
@@ -4350,6 +4276,7 @@ export class AgentManager {
   private async buildLaunchContext(
     agentId: string,
     client: AgentClient,
+    cwd: string,
     env?: Record<string, string>,
   ): Promise<AgentLaunchContext> {
     const context: AgentLaunchContext = {
@@ -4357,6 +4284,7 @@ export class AgentManager {
       env: {
         ...env,
         PASEO_AGENT_ID: agentId,
+        PASEO_AGENT_CWD: cwd,
       },
     };
     if (

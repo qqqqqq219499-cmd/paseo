@@ -15,6 +15,33 @@ import { balanceToneFromRemaining, unavailableUsage } from "../usage.js";
 interface GrokQuotaProviderOptions {
   logger: Logger;
   fetch?: ProviderApiFetch;
+  /** Override home directory (tests). Production uses resolveGrokHome. */
+  homeDir?: string;
+}
+
+/** Resolve a Grok CLI token from ~/.grok/auth.json (legacy or current nested shape). */
+export function extractGrokTokenFromAuth(auth: unknown): string | null {
+  if (auth == null || typeof auth !== "object" || Array.isArray(auth)) return null;
+  const record = auth as Record<string, unknown>;
+
+  const topLevel = record["access_token"];
+  if (typeof topLevel === "string" && topLevel.length > 0) {
+    return topLevel;
+  }
+
+  const entries = Object.entries(record);
+  const preferred = entries.filter(([key]) => key.startsWith("https://auth.x.ai::"));
+  const candidates = preferred.length > 0 ? preferred : entries;
+
+  for (const [, value] of candidates) {
+    if (value == null || typeof value !== "object" || Array.isArray(value)) continue;
+    const nestedKey = (value as Record<string, unknown>)["key"];
+    if (typeof nestedKey === "string" && nestedKey.length > 0) {
+      return nestedKey;
+    }
+  }
+
+  return null;
 }
 
 // Live usage card for the ACTIVE grok account (feeds `provider.usage.list`).
@@ -28,10 +55,12 @@ export class GrokQuotaProvider implements ProviderUsageFetcher {
 
   private readonly logger: Logger;
   private readonly fetchApi: ProviderApiFetch;
+  private readonly homeDir: string | undefined;
 
   constructor(options: GrokQuotaProviderOptions) {
     this.logger = options.logger;
     this.fetchApi = options.fetch ?? fetch;
+    this.homeDir = options.homeDir;
   }
 
   async fetchUsage(): Promise<ProviderUsage> {
@@ -86,11 +115,19 @@ export class GrokQuotaProvider implements ProviderUsageFetcher {
   // (`resolveGrokHome`: GROK_HOME or ~/.grok). Modern issuer-keyed files resolve
   // the active entry's `key` through the shared codec; a legacy top-level
   // `access_token` file still works via the codec's legacy branch.
+  // homeDir override is for tests: Windows os.homedir() ignores $HOME (uses USERPROFILE).
   private async readGrokToken(): Promise<string | null> {
-    const path = join(resolveGrokHome(process.env, homedir), "auth.json");
+    const path = this.homeDir
+      ? join(this.homeDir, ".grok", "auth.json")
+      : join(resolveGrokHome(process.env, homedir), "auth.json");
     if (!existsSync(path)) return null;
     try {
-      return extractBearerToken(parseGrokAuthFile(await fs.readFile(path, "utf8")));
+      const raw = await fs.readFile(path, "utf8");
+      try {
+        return extractBearerToken(parseGrokAuthFile(raw));
+      } catch {
+        return extractGrokTokenFromAuth(JSON.parse(raw));
+      }
     } catch {
       return null;
     }

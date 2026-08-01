@@ -135,6 +135,8 @@ interface WebSocketConnectionIdentity {
 interface WebSocketServerConfig {
   allowedOrigins: Set<string>;
   hostnames?: HostnamesConfig;
+  daemonStatusRpc?: boolean;
+  relayConfig?: boolean;
 }
 
 type WebSocketRuntimeMetrics = SessionRuntimeMetrics & CheckoutDiffMetrics;
@@ -264,12 +266,15 @@ function createNoopProjectRegistry(): ProjectRegistry {
       rootPath: input.rootPath,
       kind: input.kind,
       displayName: input.displayName,
+      projectKey: input.projectKey ?? null,
       customName: null,
+      customIconRevision: null,
       createdAt: input.timestamp,
       updatedAt: input.timestamp,
       archivedAt: null,
     }),
     upsert: async () => {},
+    update: async () => null,
     archive: async () => {},
     remove: async () => {},
   };
@@ -558,6 +563,8 @@ export class VoiceAssistantWebSocketServer {
   private readonly hubRelationships: HubRelationshipManagement | null;
   private readonly browserToolsRegistrations = new Map<string, BrowserToolsRegistration>();
   private acceptingConnections = true;
+  private readonly advertiseDaemonStatusRpc: boolean;
+  private readonly advertiseRelayConfig: boolean;
 
   constructor(
     server: HTTPServer,
@@ -606,6 +613,8 @@ export class VoiceAssistantWebSocketServer {
     hubRelationships?: HubRelationshipManagement | null,
   ) {
     this.logger = logger.child({ module: "websocket-server" });
+    this.advertiseDaemonStatusRpc = wsConfig.daemonStatusRpc !== false;
+    this.advertiseRelayConfig = wsConfig.relayConfig !== false;
     this.serverId = serverId;
     if (typeof daemonVersion !== "string" || daemonVersion.trim().length === 0) {
       throw new MissingDaemonVersionError();
@@ -1551,7 +1560,9 @@ export class VoiceAssistantWebSocketServer {
         // COMPAT(forgeSearch): added in v0.1.106, remove github_search fallback after 2026-12-28.
         forgeSearch: true,
         // COMPAT(daemonStatusRpc): added in v0.1.76, remove gate after 2026-11-18.
-        daemonStatusRpc: true,
+        ...(this.advertiseDaemonStatusRpc ? { daemonStatusRpc: true } : {}),
+        // COMPAT(relayConfig): added in v0.2.6, remove gate after 2027-01-31.
+        ...(this.advertiseRelayConfig ? { relayConfig: true } : {}),
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": true,
         // COMPAT(rewind): added in v0.1.X, drop the gate when floor >= v0.1.X.
@@ -1564,6 +1575,8 @@ export class VoiceAssistantWebSocketServer {
         projectRemove: true,
         // COMPAT(projectAdd): added in v0.1.97, drop the gate when floor >= v0.1.97.
         projectAdd: true,
+        // COMPAT(projectList): added in v0.2.4, drop the gate when floor >= v0.2.4.
+        projectList: true,
         // COMPAT(worktreeRestore): keep through 2027-01-11 for clients older than v0.1.105.
         worktreeRestore: true,
         // COMPAT(workspaceRecovery): added in v0.1.105, remove after 2027-01-11 once daemon floor >= v0.1.105.
@@ -1576,6 +1589,8 @@ export class VoiceAssistantWebSocketServer {
         grokAccounts: true,
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
         agentDetach: true,
+        // COMPAT(agentThinkingUpdate): added in v0.2.4, remove gate after 2027-01-28.
+        agentThinkingUpdate: true,
         // COMPAT(daemonDiagnostics): added in v0.1.100, remove gate after 2026-12-25 once daemon floor >= v0.1.100.
         daemonDiagnostics: true,
         // COMPAT(daemonSelfUpdate): added in v0.1.93, remove gate after 2026-12-13.
@@ -1612,6 +1627,8 @@ export class VoiceAssistantWebSocketServer {
         stableProjectIdentity: true,
         // COMPAT(workspaceScriptManagement): added in v0.1.105, remove gate after 2027-01-10.
         workspaceScriptManagement: true,
+        // COMPAT(projectCustomIcon): added in v0.2.0, remove after 2027-01-20.
+        projectCustomIcon: true,
       },
     };
   }
