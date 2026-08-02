@@ -1,29 +1,18 @@
 import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { Pressable, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
-import {
-  Archive,
-  ChevronDown,
-  ChevronRight,
-  LayoutGrid,
-  List,
-  Unlink,
-  Waypoints,
-} from "lucide-react-native";
+import { Archive, ChevronDown, ChevronRight, Unlink } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { getProviderIcon } from "@/components/provider-icons";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsCompactFormFactor, MAX_CONTENT_WIDTH } from "@/constants/layout";
-import { isNative, isWeb } from "@/constants/platform";
+import { isNative } from "@/constants/platform";
 import {
   WorkspaceTabIcon,
   type WorkspaceTabPresentation,
 } from "@/screens/workspace/workspace-tab-presentation";
 import type { Theme } from "@/styles/theme";
 import type { SubagentRow } from "./select";
-import { SwarmBoardView } from "@/subagents/swarm-board-view";
-import { SwarmGraphView } from "@/subagents/swarm-graph-view";
-import type { SwarmCardViewModel } from "@/subagents/swarm-cards";
 import {
   buildSubagentRowPresentationData,
   countFinishedSubagents,
@@ -33,9 +22,6 @@ import {
 const ThemedArchive = withUnistyles(Archive);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedChevronRight = withUnistyles(ChevronRight);
-const ThemedLayoutGrid = withUnistyles(LayoutGrid);
-const ThemedList = withUnistyles(List);
-const ThemedWaypoints = withUnistyles(Waypoints);
 const ThemedUnlink = withUnistyles(Unlink);
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
@@ -45,57 +31,11 @@ const foregroundMutedColorMapping = (theme: Theme) => ({
 
 export interface SubagentsTrackProps {
   rows: SubagentRow[];
-  serverId: string;
-  parentAgentId: string;
   onOpenSubagent: (id: string) => void;
   onOpenProviderSubagent: (parentAgentId: string, subagentId: string) => void;
   onArchiveSubagent: (id: string) => void;
   onArchiveFinished?: () => void;
   onDetachSubagent?: (id: string) => void;
-}
-
-type SubagentsTrackViewMode = "graph" | "board" | "list";
-
-type SubagentActionIcon = "archive" | "detach" | "grid" | "list" | "waypoints";
-
-function resolveViewTogglePresentation(
-  viewMode: SubagentsTrackViewMode,
-  web: boolean,
-  t: (key: string) => string,
-): { label: string; tooltip: string; icon: SubagentActionIcon } {
-  if (!web) {
-    if (viewMode === "board") {
-      return {
-        label: t("swarmBoard.showListAction"),
-        tooltip: t("swarmBoard.showListTooltip"),
-        icon: "grid",
-      };
-    }
-    return {
-      label: t("swarmBoard.showBoardAction"),
-      tooltip: t("swarmBoard.showBoardTooltip"),
-      icon: "list",
-    };
-  }
-  if (viewMode === "graph") {
-    return {
-      label: t("swarmBoard.showBoardAction"),
-      tooltip: t("swarmBoard.showBoardTooltip"),
-      icon: "waypoints",
-    };
-  }
-  if (viewMode === "board") {
-    return {
-      label: t("swarmBoard.showListAction"),
-      tooltip: t("swarmBoard.showListTooltip"),
-      icon: "grid",
-    };
-  }
-  return {
-    label: t("swarmBoard.showGraphAction"),
-    tooltip: t("swarmBoard.showGraphTooltip"),
-    icon: "list",
-  };
 }
 
 const SUBAGENTS_LIST_MAX_HEIGHT = 200;
@@ -112,8 +52,6 @@ function buildRowPresentation(row: SubagentRow): WorkspaceTabPresentation {
 
 export function SubagentsTrack({
   rows,
-  serverId,
-  parentAgentId,
   onOpenSubagent,
   onOpenProviderSubagent,
   onArchiveSubagent,
@@ -121,39 +59,11 @@ export function SubagentsTrack({
   onDetachSubagent,
 }: SubagentsTrackProps): ReactElement | null {
   const { t } = useTranslation();
-  // Default expanded so multi-agent cards live inside the parent session
-  // (composer stack), not behind a separate workspace tab switch.
-  const [expanded, setExpanded] = useState(true);
-  const [viewMode, setViewMode] = useState<SubagentsTrackViewMode>(() =>
-    isWeb ? "graph" : "board",
-  );
+  const [expanded, setExpanded] = useState(false);
 
   const toggleExpanded = useCallback(() => {
     setExpanded((current) => !current);
   }, []);
-
-  const toggleViewMode = useCallback(() => {
-    setViewMode((current) => {
-      if (!isWeb) {
-        return current === "board" ? "list" : "board";
-      }
-      if (current === "graph") return "board";
-      if (current === "board") return "list";
-      return "graph";
-    });
-    setExpanded(true);
-  }, []);
-
-  const handleOpenSwarmCard = useCallback(
-    (card: SwarmCardViewModel) => {
-      if (card.kind === "paseo") {
-        onOpenSubagent(card.subagentId);
-      } else {
-        onOpenProviderSubagent(card.parentAgentId, card.subagentId);
-      }
-    },
-    [onOpenSubagent, onOpenProviderSubagent],
-  );
 
   const surfaceStyle = useMemo(
     () => [styles.surface, expanded && styles.surfaceExpanded],
@@ -178,13 +88,6 @@ export function SubagentsTrack({
 
   const headerLabel = formatHeaderLabel(rows);
   const finishedCount = countFinishedSubagents(rows);
-  const graphMode = viewMode === "graph";
-  const boardMode = viewMode === "board";
-  const listMode = viewMode === "list";
-  const viewToggle = resolveViewTogglePresentation(viewMode, isWeb, t);
-  const viewToggleLabel = viewToggle.label;
-  const viewToggleTooltip = viewToggle.tooltip;
-  const viewToggleIcon = viewToggle.icon;
 
   return (
     <View style={styles.outer} testID="subagents-track">
@@ -207,16 +110,6 @@ export function SubagentsTrack({
                 {headerLabel}
               </Text>
             </Pressable>
-            <View style={styles.headerAction}>
-              <SubagentActionButton
-                accessibilityLabel={viewToggleLabel}
-                testID="subagents-track-toggle-swarm-view"
-                tooltipLabel={viewToggleTooltip}
-                icon={viewToggleIcon}
-                visible
-                onPress={toggleViewMode}
-              />
-            </View>
             {finishedCount > 0 && onArchiveFinished ? (
               <View style={styles.headerAction}>
                 <SubagentActionButton
@@ -230,23 +123,7 @@ export function SubagentsTrack({
               </View>
             ) : null}
           </View>
-          {expanded && graphMode ? (
-            <SwarmGraphView
-              serverId={serverId}
-              parentAgentId={parentAgentId}
-              variant="inline"
-              onOpenCard={handleOpenSwarmCard}
-            />
-          ) : null}
-          {expanded && boardMode ? (
-            <SwarmBoardView
-              serverId={serverId}
-              parentAgentId={parentAgentId}
-              variant="inline"
-              onOpenCard={handleOpenSwarmCard}
-            />
-          ) : null}
-          {expanded && listMode ? (
+          {expanded ? (
             <ScrollView
               style={styles.scroll}
               contentContainerStyle={styles.scrollContent}
@@ -389,19 +266,12 @@ function SubagentRowActions({
   );
 }
 
+type SubagentActionIcon = "archive" | "detach";
+
 function renderSubagentActionIcon(icon: SubagentActionIcon, isActive: boolean): ReactElement {
   const uniProps = isActive ? foregroundColorMapping : foregroundMutedColorMapping;
   if (icon === "detach") {
     return <ThemedUnlink size={14} uniProps={uniProps} />;
-  }
-  if (icon === "grid") {
-    return <ThemedLayoutGrid size={14} uniProps={uniProps} />;
-  }
-  if (icon === "list") {
-    return <ThemedList size={14} uniProps={uniProps} />;
-  }
-  if (icon === "waypoints") {
-    return <ThemedWaypoints size={14} uniProps={uniProps} />;
   }
   return <ThemedArchive size={14} uniProps={uniProps} />;
 }

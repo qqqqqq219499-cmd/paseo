@@ -91,7 +91,6 @@ interface SidebarSharedProps {
   pinnedGroups: PinnedSidebarGroups;
   projects: SidebarProjectEntry[];
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
-  projectNamesByViewKey: Map<string, string>;
   isInitialLoad: boolean;
   isRevalidating: boolean;
   isManualRefresh: boolean;
@@ -162,7 +161,6 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
   const {
     projects,
     workspaceEntriesByKey,
-    projectNamesByViewKey,
     isInitialLoad,
     isRevalidating,
     refreshAll,
@@ -283,7 +281,6 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
     pinnedGroups,
     projects,
     workspaceEntriesByKey,
-    projectNamesByViewKey,
     isInitialLoad,
     isRevalidating,
     isManualRefresh,
@@ -647,7 +644,6 @@ function MobileSidebar({
   pinnedGroups,
   projects,
   workspaceEntriesByKey,
-  projectNamesByViewKey,
   isInitialLoad,
   isRevalidating,
   isManualRefresh,
@@ -854,7 +850,6 @@ function DesktopSidebar({
   pinnedGroups,
   projects,
   workspaceEntriesByKey,
-  projectNamesByViewKey,
   isInitialLoad,
   isRevalidating,
   isManualRefresh,

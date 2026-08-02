@@ -107,7 +107,7 @@ import {
   useHostRuntimeSnapshot,
   useHosts,
 } from "@/runtime/host-runtime";
-import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
+import { prefetchProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { shouldShowWorkspaceSetup, useWorkspaceSetupStore } from "@/stores/workspace-setup-store";
 import { useWorkspace } from "@/stores/session-store-hooks";
 import { useWorkspaceTerminalSessionRetention } from "@/terminal/hooks/use-workspace-terminal-session-retention";
@@ -115,8 +115,8 @@ import type { CheckoutStatusPayload } from "@/git/use-status-query";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useStableEvent } from "@/hooks/use-stable-event";
-import { removeResidentBrowserWebview } from "@/components/browser-webview-resident";
-import { createWorkspaceBrowser, useBrowserStore } from "@/stores/browser-store";
+import { removeResidentBrowserWebview } from "@/desktop/browser/resident-webviews";
+import { createWorkspaceBrowser, useBrowserStore } from "@/desktop/browser/store";
 import { getDesktopHost } from "@/desktop/host";
 import { buildProviderCommand } from "@/utils/provider-command-templates";
 import { generateDraftId } from "@/stores/draft-keys";
@@ -140,7 +140,7 @@ import {
   type WorkspaceTabMenuEntry,
   type WorkspaceTabMenuLabels,
 } from "@/screens/workspace/workspace-tab-menu";
-import { useDesktopBrowserNewTabRequests } from "@/browser/new-tab-requests";
+import { useDesktopBrowserNewTabRequests } from "@/desktop/browser/new-tab-requests";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import {
   resolveWorkspaceHeaderRenderState,
@@ -1784,6 +1784,9 @@ function WorkspaceScreenContent({
 
   const client = useHostRuntimeClient(normalizedServerId);
   const isConnected = useHostRuntimeIsConnected(normalizedServerId);
+  const supportsProvidersSnapshot = useSessionStore(
+    (state) => state.sessions[normalizedServerId]?.serverInfo?.features?.providersSnapshot === true,
+  );
   const workspaceDirectory = workspaceDescriptor?.workspaceDirectory || null;
   const isMissingWorkspaceDirectory = Boolean(workspaceDescriptor) && !workspaceDirectory;
   const [isImportSheetVisible, setIsImportSheetVisible] = useState(false);
@@ -1795,11 +1798,25 @@ function WorkspaceScreenContent({
     setIsImportSheetVisible(false);
   }, []);
 
-  // Warm the workspace-scoped provider snapshot so the model picker is ready when opened.
-  useProvidersSnapshot(normalizedServerId, {
-    cwd: workspaceDirectory,
-    enabled: isRouteFocused,
-  });
+  useEffect(() => {
+    if (
+      !isRouteFocused ||
+      !isConnected ||
+      !client ||
+      !workspaceDirectory ||
+      !supportsProvidersSnapshot
+    ) {
+      return;
+    }
+    prefetchProvidersSnapshot(normalizedServerId, client, { cwd: workspaceDirectory });
+  }, [
+    client,
+    isConnected,
+    isRouteFocused,
+    normalizedServerId,
+    supportsProvidersSnapshot,
+    workspaceDirectory,
+  ]);
 
   const persistenceKey = useMemo(
     () =>
@@ -3062,6 +3079,9 @@ function WorkspaceScreenContent({
         case "workspace.terminal.new":
           handleCreateTerminal();
           return true;
+        case "workspace.browser.new":
+          handleCreateBrowserTab();
+          return true;
         case "workspace.tab.close-current":
           if (activeTabId) {
             void handleCloseTabById(activeTabId);
@@ -3094,6 +3114,7 @@ function WorkspaceScreenContent({
       activeTabId,
       handleCloseTabById,
       handleCreateDraftTab,
+      handleCreateBrowserTab,
       handleCreateTerminal,
       navigateToTabId,
       tabs,
@@ -3208,6 +3229,7 @@ function WorkspaceScreenContent({
       "workspace.tab.navigate-index",
       "workspace.tab.navigate-relative",
       "workspace.terminal.new",
+      "workspace.browser.new",
     ] as const,
     enabled: Boolean(isRouteFocused && normalizedServerId && normalizedWorkspaceId),
     priority: 100,
@@ -3888,7 +3910,7 @@ function WorkspaceScreenContent({
         {workspaceCenterColumn}
       </WorkspaceChromeRow>
       <ImportSessionSheet
-        visible={isImportSheetVisible}
+        visible={isRouteFocused && isImportSheetVisible}
         client={client}
         serverId={normalizedServerId}
         cwd={workspaceDirectory}
@@ -3897,7 +3919,7 @@ function WorkspaceScreenContent({
         onImportedAgent={handleImportedAgent}
       />
       <WorkspaceTabRenameModal
-        renamingTab={renamingTab}
+        renamingTab={isRouteFocused ? renamingTab : null}
         onSubmit={handleRenameModalSubmit}
         onClose={handleRenameModalClose}
       />

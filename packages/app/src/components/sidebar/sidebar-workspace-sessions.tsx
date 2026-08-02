@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Text, View, type PressableStateCallbackType } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
+import * as Clipboard from "expo-clipboard";
 import { StyleSheet } from "react-native-unistyles";
 import { SessionStatusIcon } from "@/components/sidebar/session-status-icon";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
@@ -86,6 +87,19 @@ export const SidebarSessionRow = memo(function SidebarSessionRow({
       });
   }, [archiveAgent, isArchiving, session.id, session.serverId, toast]);
 
+  const handleCopyAgentId = useCallback(() => {
+    if (!session.id) {
+      return;
+    }
+    void Clipboard.setStringAsync(session.id)
+      .then(() => {
+        toast.copied(t("workspace.tabs.toasts.agentIdCopiedLabel"));
+      })
+      .catch(() => {
+        toast.error(t("workspace.tabs.toasts.copyFailed"));
+      });
+  }, [session.id, t, toast]);
+
   const pressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.sessionRow,
@@ -149,6 +163,12 @@ export const SidebarSessionRow = memo(function SidebarSessionRow({
           onSelect={handleOpenRename}
         >
           {t("workspace.tabs.menu.renameAgent")}
+        </ContextMenuItem>
+        <ContextMenuItem
+          testID={`sidebar-session-context-${session.id}-copy-id`}
+          onSelect={handleCopyAgentId}
+        >
+          {t("workspace.tabs.menu.copyAgentId")}
         </ContextMenuItem>
         <ContextMenuItem
           testID={`sidebar-session-context-${session.id}-archive`}

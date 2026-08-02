@@ -49,6 +49,7 @@ export interface AppSettings {
   /** Display-only: translate Latin-script reasoning blocks to Simplified Chinese. */
   autoTranslateReasoning: boolean;
   toolCallDetailLevel: ToolCallDetailLevel;
+  chatOutlineEnabled: boolean;
   vimKeybindings: boolean;
 }
 
@@ -75,6 +76,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   autoExpandReasoning: false,
   autoTranslateReasoning: true,
   toolCallDetailLevel: "detailed",
+  chatOutlineEnabled: true,
   vimKeybindings: false,
 };
 
@@ -196,8 +198,39 @@ function parseToolCallDetailLevel(stored: StoredAppSettings): ToolCallDetailLeve
   return null;
 }
 
-function pickFontAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
+function pickBooleanAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   const result: Partial<AppSettings> = {};
+  if (typeof stored.vimKeybindings === "boolean") {
+    result.vimKeybindings = stored.vimKeybindings;
+  }
+  if (typeof stored.chatOutlineEnabled === "boolean") {
+    result.chatOutlineEnabled = stored.chatOutlineEnabled;
+  }
+  return result;
+}
+
+function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
+  const result: Partial<AppSettings> = {};
+  if (typeof stored.theme === "string" && VALID_THEMES.has(stored.theme)) {
+    result.theme = stored.theme;
+  }
+  const language = parseAppLanguage(stored.language);
+  if (language !== null) {
+    result.language = language;
+  }
+  if (stored.sendBehavior === "interrupt" || stored.sendBehavior === "queue") {
+    result.sendBehavior = stored.sendBehavior;
+  }
+  if (
+    typeof stored.serviceUrlBehavior === "string" &&
+    VALID_SERVICE_URL_BEHAVIORS.has(stored.serviceUrlBehavior)
+  ) {
+    result.serviceUrlBehavior = stored.serviceUrlBehavior;
+  }
+  const terminalScrollbackLines = parseTerminalScrollbackLines(stored.terminalScrollbackLines);
+  if (terminalScrollbackLines !== null) {
+    result.terminalScrollbackLines = terminalScrollbackLines;
+  }
   const uiFontFamily = sanitizeFontFamily(stored.uiFontFamily);
   if (uiFontFamily !== null) {
     result.uiFontFamily = uiFontFamily;
@@ -223,34 +256,7 @@ function pickFontAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   if (typeof stored.syntaxTheme === "string" && isSyntaxThemeId(stored.syntaxTheme)) {
     result.syntaxTheme = stored.syntaxTheme;
   }
-  return result;
-}
-
-function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
-  const result: Partial<AppSettings> = pickFontAppSettings(stored);
-  if (typeof stored.theme === "string" && VALID_THEMES.has(stored.theme)) {
-    result.theme = stored.theme;
-  }
-  const language = parseAppLanguage(stored.language);
-  if (language !== null) {
-    result.language = language;
-  }
-  if (stored.sendBehavior === "interrupt" || stored.sendBehavior === "queue") {
-    result.sendBehavior = stored.sendBehavior;
-  }
-  if (
-    typeof stored.serviceUrlBehavior === "string" &&
-    VALID_SERVICE_URL_BEHAVIORS.has(stored.serviceUrlBehavior)
-  ) {
-    result.serviceUrlBehavior = stored.serviceUrlBehavior;
-  }
-  const terminalScrollbackLines = parseTerminalScrollbackLines(stored.terminalScrollbackLines);
-  if (terminalScrollbackLines !== null) {
-    result.terminalScrollbackLines = terminalScrollbackLines;
-  }
-  if (typeof stored.vimKeybindings === "boolean") {
-    result.vimKeybindings = stored.vimKeybindings;
-  }
+  Object.assign(result, pickBooleanAppSettings(stored));
   if (
     typeof stored.workspaceTitleSource === "string" &&
     VALID_WORKSPACE_TITLE_SOURCES.has(stored.workspaceTitleSource)

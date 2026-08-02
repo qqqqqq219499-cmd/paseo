@@ -234,6 +234,30 @@ function AutoTranslateReasoningRow({ value, onChange }: AutoTranslateReasoningRo
   );
 }
 
+interface ChatOutlineRowProps {
+  value: boolean;
+  onChange: (value: boolean) => void;
+}
+
+function ChatOutlineRow({ value, onChange }: ChatOutlineRowProps) {
+  const { t } = useTranslation();
+  return (
+    <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>{t("settings.appearance.chatOutline.title")}</Text>
+        <Text style={settingsStyles.rowHint}>
+          {t("settings.appearance.chatOutline.description")}
+        </Text>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onChange}
+        accessibilityLabel={t("settings.appearance.chatOutline.title")}
+      />
+    </View>
+  );
+}
+
 const TOOL_CALL_DETAIL_LEVELS: readonly AppSettings["toolCallDetailLevel"][] = [
   "detailed",
   "overview",
@@ -539,6 +563,13 @@ export function AppearanceSection() {
     [updateSettings],
   );
 
+  const handleChatOutlineChange = useCallback(
+    (chatOutlineEnabled: boolean) => {
+      void updateSettings({ chatOutlineEnabled });
+    },
+    [updateSettings],
+  );
+
   const commitUiFontFamily = useCallback(
     (value: string) => {
       const sanitized = sanitizeFontFamily(value);
@@ -648,6 +679,12 @@ export function AppearanceSection() {
             value={settings.toolCallDetailLevel}
             onChange={handleToolCallDetailLevelChange}
           />
+          {!isNative ? (
+            <ChatOutlineRow
+              value={settings.chatOutlineEnabled}
+              onChange={handleChatOutlineChange}
+            />
+          ) : null}
         </View>
       </SettingsSection>
       <SettingsSection title={t("settings.appearance.fonts.title")}>
