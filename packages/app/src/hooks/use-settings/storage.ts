@@ -38,6 +38,7 @@ export interface AppSettings {
   sendBehavior: SendBehavior;
   serviceUrlBehavior: ServiceUrlBehavior;
   terminalScrollbackLines: number;
+  useLegacyTerminalRenderer: boolean;
   uiFontFamily: string; // "" = platform default UI stack
   monoFontFamily: string; // "" = platform default mono stack
   uiFontSize: number; // clamped px, default 16
@@ -66,6 +67,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   sendBehavior: "interrupt",
   serviceUrlBehavior: "ask",
   terminalScrollbackLines: DEFAULT_TERMINAL_SCROLLBACK_LINES,
+  useLegacyTerminalRenderer: false,
   uiFontFamily: "",
   monoFontFamily: "",
   uiFontSize: DEFAULT_UI_FONT_SIZE,
@@ -200,11 +202,25 @@ function parseToolCallDetailLevel(stored: StoredAppSettings): ToolCallDetailLeve
 
 function pickBooleanAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   const result: Partial<AppSettings> = {};
+  if (typeof stored.useLegacyTerminalRenderer === "boolean") {
+    result.useLegacyTerminalRenderer = stored.useLegacyTerminalRenderer;
+  }
   if (typeof stored.vimKeybindings === "boolean") {
     result.vimKeybindings = stored.vimKeybindings;
   }
   if (typeof stored.chatOutlineEnabled === "boolean") {
     result.chatOutlineEnabled = stored.chatOutlineEnabled;
+  }
+  // Device-local: deliberately NOT synced across devices — toggling the new
+  // theme on one device does not propagate to others.
+  if (typeof stored.newThemeEnabled === "boolean") {
+    result.newThemeEnabled = stored.newThemeEnabled;
+  }
+  if (typeof stored.autoExpandReasoning === "boolean") {
+    result.autoExpandReasoning = stored.autoExpandReasoning;
+  }
+  if (typeof stored.autoTranslateReasoning === "boolean") {
+    result.autoTranslateReasoning = stored.autoTranslateReasoning;
   }
   return result;
 }
@@ -262,17 +278,6 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
     VALID_WORKSPACE_TITLE_SOURCES.has(stored.workspaceTitleSource)
   ) {
     result.workspaceTitleSource = stored.workspaceTitleSource;
-  }
-  // Device-local: deliberately NOT synced across devices — toggling the new
-  // theme on one device does not propagate to others.
-  if (typeof stored.newThemeEnabled === "boolean") {
-    result.newThemeEnabled = stored.newThemeEnabled;
-  }
-  if (typeof stored.autoExpandReasoning === "boolean") {
-    result.autoExpandReasoning = stored.autoExpandReasoning;
-  }
-  if (typeof stored.autoTranslateReasoning === "boolean") {
-    result.autoTranslateReasoning = stored.autoTranslateReasoning;
   }
   const toolCallDetailLevel = parseToolCallDetailLevel(stored);
   if (toolCallDetailLevel !== null) {

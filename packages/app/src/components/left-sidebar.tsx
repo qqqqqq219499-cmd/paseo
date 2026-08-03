@@ -816,7 +816,6 @@ function MobileSidebar({
                 pinnedGroups={pinnedGroups}
                 projects={projects}
                 workspaceEntriesByKey={workspaceEntriesByKey}
-                projectNamesByViewKey={projectNamesByViewKey}
                 isRefreshing={isManualRefresh && isRevalidating}
                 onRefresh={handleRefresh}
                 onWorkspacePress={handleWorkspacePress}
@@ -967,7 +966,6 @@ function DesktopSidebar({
         pinnedGroups={pinnedGroups}
         projects={projects}
         workspaceEntriesByKey={workspaceEntriesByKey}
-        projectNamesByViewKey={projectNamesByViewKey}
         isRefreshing={isManualRefresh && isRevalidating}
         onRefresh={handleRefresh}
         onAddProject={handleOpenProject}

@@ -88,6 +88,7 @@ function makePaseoAgent(id: string, overrides: Partial<Agent> = {}): Agent {
     id,
     provider: "claude",
     status: "running",
+    activeTurn: null,
     createdAt,
     updatedAt: createdAt,
     lastUserMessageAt: null,

@@ -85,6 +85,7 @@ import {
   type BottomAnchorRouteRequest,
 } from "./bottom-anchor-controller";
 import { createAssistantImageOccurrenceKey } from "@/assistant-image/acquisition-cache";
+import { AssistantSelectionCopySurface } from "@/assistant-selection-copy/surface";
 import {
   AssistantFileLinkResolverProvider,
   normalizeInlinePathTarget,
@@ -977,7 +978,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     return (
       <ToolCallSheetProvider>
-        <View style={stylesheet.container}>
+        <AssistantSelectionCopySurface style={stylesheet.container}>
           <MessageOuterSpacingProvider disableOuterSpacing>
             {streamRenderStrategy.render({
               agentId,
@@ -1022,7 +1023,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               </Animated.View>
             </View>
           )}
-        </View>
+        </AssistantSelectionCopySurface>
       </ToolCallSheetProvider>
     );
   },
