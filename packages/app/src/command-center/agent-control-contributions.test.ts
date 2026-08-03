@@ -397,4 +397,22 @@ describe("Command Center agent-control contributions", () => {
       contributions.length,
     );
   });
+
+  it("dedupes identical provider:model rows from multi-catalog providers", () => {
+    const duplicateProvider = provider({ id: "codex", label: "Codex" });
+    const contributions = buildAgentControlContributions(
+      makeSource({
+        models: {
+          providers: [duplicateProvider, duplicateProvider],
+          selectedProvider: "codex",
+          selectedModelId: "shared",
+        },
+      }),
+    );
+    const modelIds = contributions
+      .filter((contribution) => contribution.group === "models")
+      .map((contribution) => contribution.id);
+    expect(modelIds).toEqual(["models:codex:shared"]);
+    expect(new Set(modelIds).size).toBe(modelIds.length);
+  });
 });

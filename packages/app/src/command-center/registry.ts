@@ -54,7 +54,9 @@ export function createCommandCenterRegistry(): CommandCenterRegistry {
       for (const contribution of registration.contributions) {
         const id = contributionId(registration.owner.sourceId, contribution.id);
         if (ids.has(id)) {
-          throw new Error(`Duplicate Command Center contribution id: ${id}`);
+          // Prefer the first registration; never crash the shell for a bad catalog.
+          console.warn(`[CommandCenter] skipping duplicate contribution id: ${id}`);
+          continue;
         }
         ids.add(id);
         contributions.push({ ...contribution, id });
@@ -82,12 +84,20 @@ export function createCommandCenterRegistry(): CommandCenterRegistry {
         return;
       }
       const ids = new Set<string>();
+      const deduped: CommandCenterContribution[] = [];
       for (const contribution of registration.contributions) {
         const id = contributionId(registration.owner.sourceId, contribution.id);
-        if (ids.has(id)) throw new Error(`Duplicate Command Center contribution id: ${id}`);
+        if (ids.has(id)) {
+          console.warn(`[CommandCenter] dropping duplicate contribution id: ${id}`);
+          continue;
+        }
         ids.add(id);
+        deduped.push(contribution);
       }
-      registrations.set(registration.owner.sourceId, registration);
+      registrations.set(registration.owner.sourceId, {
+        owner: registration.owner,
+        contributions: deduped,
+      });
       publish();
     },
     remove(owner) {

@@ -142,6 +142,9 @@ function buildContributions(
 
 function buildModelGroup(source: AgentControlContributionSource): CommandCenterChoiceGroup {
   const choices: CommandCenterChoice[] = [];
+  // Gateway / multi-catalog providers can surface the same provider:model more than once.
+  // Command Center requires unique contribution ids, so keep the first row only.
+  const seenChoiceIds = new Set<string>();
   for (const provider of source.models.providers) {
     if (provider.modelSelection.kind !== "models") continue;
     const agentProvider = provider.id;
@@ -149,8 +152,11 @@ function buildModelGroup(source: AgentControlContributionSource): CommandCenterC
     for (const model of provider.modelSelection.rows) {
       if (!model.modelId) continue;
       const modelId = model.modelId;
+      const choiceId = `${provider.id}:${modelId}`;
+      if (seenChoiceIds.has(choiceId)) continue;
+      seenChoiceIds.add(choiceId);
       choices.push({
-        id: `${provider.id}:${modelId}`,
+        id: choiceId,
         path: [provider.label, model.modelLabel],
         keywords: [modelId],
         icon,
