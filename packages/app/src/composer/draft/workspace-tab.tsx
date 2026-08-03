@@ -32,6 +32,10 @@ import {
   shouldAllowEmptyDraftText,
   validateDraftSubmission,
 } from "@/composer/draft/workspace-tab-core";
+import {
+  resolveDraftClusterCreateLabels,
+  resolveDraftClusterCreateOptions,
+} from "@/composer/agent-controls/cluster";
 import type { AgentCapabilityFlags } from "@getpaseo/protocol/agent-types";
 import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
@@ -149,6 +153,7 @@ async function submitDraftCreateRequest(input: {
     effectiveModelId: string | null;
     effectiveThinkingOptionId: string | null;
     featureValues: Record<string, unknown> | undefined;
+    agentControls: { clusterControl?: { enabled: boolean } | null };
   };
   hostDisconnectedMessage: string;
   selectModelMessage: string;
@@ -200,6 +205,7 @@ async function submitDraftCreateRequest(input: {
     clientMessageId: attempt.clientMessageId,
     ...(imagesData && imagesData.length > 0 ? { images: imagesData } : {}),
     ...(attachmentsArray && attachmentsArray.length > 0 ? { attachments: attachmentsArray } : {}),
+    ...resolveDraftClusterCreateOptions(composerState.agentControls.clusterControl),
   });
 
   return {
@@ -220,7 +226,10 @@ function buildDraftAgentSnapshot(input: {
     modeOptions: readonly { id: string }[];
     selectedMode: string;
     selectedProvider: string | null;
-    agentControls: { features?: Agent["features"] };
+    agentControls: {
+      features?: Agent["features"];
+      clusterControl?: { enabled: boolean } | null;
+    };
   };
   selectModelMessage: string;
 }): Agent {
@@ -261,7 +270,9 @@ function buildDraftAgentSnapshot(input: {
     features: composerState.agentControls.features,
     thinkingOptionId,
     parentAgentId: null,
-    labels: {},
+    labels: resolveDraftClusterCreateLabels(
+      composerState.agentControls.clusterControl?.enabled === true,
+    ),
   };
 }
 

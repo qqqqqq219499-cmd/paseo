@@ -59,7 +59,33 @@ import { loadPersistedConfig } from "./persisted-config.js";
 import { releaseWorkspaceServicePortPlan } from "./workspace-service-port-registry.js";
 import { getErrorMessage, getErrorMessageOr } from "@getpaseo/protocol/error-utils";
 import { getAgentStatusPriority } from "@getpaseo/protocol/agent-state-bucket";
-import { getParentAgentIdFromLabels } from "@getpaseo/protocol/agent-labels";
+import { getParentAgentIdFromLabels, isClusterModeEnabled } from "@getpaseo/protocol/agent-labels";
+import {
+  buildClusterSkipNotice,
+  ClusterSendGateError,
+  type ClusterSendGateDecision,
+} from "./agent/cluster/send-gate.js";
+import {
+  CLUSTER_RUN_ALREADY_ACTIVE_ERROR,
+  tryAcquireClusterRun,
+} from "./agent/cluster/run-registry.js";
+import {
+  CLUSTER_TOOLS_DISABLED_ERROR,
+  shouldSkipCluster,
+  startClusterRun,
+  type ClusterPlanTask,
+  type ClusterSpawnTask,
+} from "./agent/cluster/orchestrator.js";
+import { runClusterPlanner } from "./agent/cluster/planner.js";
+import { resolveClusterWorkerProfile } from "./agent/cluster/preferences.js";
+import { runClusterReview, type ClusterReviewPort } from "./agent/cluster/review-run.js";
+import { spawnClusterWorkers, type SpawnClusterWorkersResult } from "./agent/cluster/spawn.js";
+import type { ClusterRunState } from "./agent/cluster/types.js";
+import {
+  waitForClusterAgentTurn,
+  waitForClusterWorkers,
+  type ClusterWorkerAgentManagerPort,
+} from "./agent/cluster/wait-workers.js";
 import type { WorkspaceGitRuntimeSnapshot, WorkspaceGitService } from "./workspace-git-service.js";
 import type { ProjectUpdate } from "./workspace-reconciliation-service.js";
 import {
@@ -77,7 +103,7 @@ import type {
   AgentTimelineFetchResult,
   ManagedAgent,
 } from "./agent/agent-manager.js";
-import { createAgentCommand } from "./agent/create-agent/create.js";
+import { createAgentCommand, type BoundCreateAgentCommand } from "./agent/create-agent/create.js";
 import { resolveCreateAgentIntent, type CreateAgentIntent } from "./agent/create-agent/intent.js";
 import {
   archiveAgentCommand,
@@ -107,6 +133,7 @@ import {
   type AgentPermissionResponse,
   type AgentRunOptions,
   type AgentSessionConfig,
+  type AgentTimelineItem,
 } from "./agent/agent-sdk-types.js";
 import type { StoredAgentRecord } from "./agent/agent-storage.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
@@ -254,6 +281,9 @@ type ProviderSubagentManagerEvent = Extract<
 const LEGACY_PROVIDER_IDS = new Set(["claude", "codex", "opencode"]);
 const MIN_VERSION_ALL_PROVIDERS = "0.1.45";
 const MIN_VERSION_EXPLICIT_WORKSPACE_RECOVERY = "0.1.105";
+/** Cluster long tasks cannot carry images/attachments this phase (explicit failure). */
+const CLUSTER_ATTACHMENTS_UNSUPPORTED_ERROR =
+  "Cluster mode does not support images or attachments this phase.";
 function errorToFriendlyMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
@@ -6540,6 +6570,282 @@ export class Session {
     }
   }
 
+  /**
+   * Cluster Mode hard path (Phase 3): only on real user `send_agent_message_request`,
+   * before `sendPromptToAgent`. OFF is a no-op; skip continues single with a notice;
+   * tools-off and unsupported attachments fail synchronously (accepted=false); long
+   * tasks persist the user message, run the hidden planner + real spawn in the
+   * background, and return handled so the main agent never runs a normal provider turn.
+   */
+  private async applyClusterSendGate(
+    agentId: string,
+    msg: Extract<SessionInboundMessage, { type: "send_agent_message_request" }>,
+  ): Promise<ClusterSendGateDecision> {
+    const live = this.agentManager.getAgent(agentId);
+    const labels = live?.labels ?? (await this.agentStorage.get(agentId))?.labels ?? {};
+    if (!isClusterModeEnabled(labels)) {
+      return { action: "continue_single" };
+    }
+
+    // AC1: tools off is a synchronous hard failure — never planning, never silent single.
+    const paseoToolsEnabled = this.daemonConfigStore.get().mcp.injectIntoAgents !== false;
+    if (!paseoToolsEnabled) {
+      throw new ClusterSendGateError(CLUSTER_TOOLS_DISABLED_ERROR);
+    }
+
+    // Chat-first (AC3): trivia/greetings stay single with a visible notice.
+    const decision = shouldSkipCluster(msg.text);
+    if (decision.skip) {
+      await ensureAgentLoaded(agentId, {
+        agentManager: this.agentManager,
+        agentStorage: this.agentStorage,
+        logger: this.sessionLogger,
+      });
+      const notice = buildClusterSkipNotice(decision.reason ?? "skipped");
+      await this.agentManager.emitLiveTimelineItem(agentId, {
+        type: "assistant_message",
+        text: notice,
+      });
+      return {
+        action: "continue_single_with_notice",
+        notice,
+        reason: decision.reason ?? "skipped",
+      };
+    }
+
+    // Long tasks with attachments are an explicit synchronous failure this phase.
+    if ((msg.images?.length ?? 0) > 0 || (msg.attachments?.length ?? 0) > 0) {
+      throw new ClusterSendGateError(CLUSTER_ATTACHMENTS_UNSUPPORTED_ERROR);
+    }
+
+    // Long task: claim the single cluster-start slot, load the main agent, verify
+    // its workspace, persist the user message — all synchronously — then hand off
+    // to the background planner. Any failure here is a synchronous accepted:false
+    // and never starts a Planner.
+    const release = tryAcquireClusterRun(this.agentManager, agentId);
+    if (!release) {
+      throw new ClusterSendGateError(CLUSTER_RUN_ALREADY_ACTIVE_ERROR);
+    }
+
+    let main: ManagedAgent;
+    try {
+      main = await ensureAgentLoaded(agentId, {
+        agentManager: this.agentManager,
+        agentStorage: this.agentStorage,
+        logger: this.sessionLogger,
+      });
+    } catch (error) {
+      release();
+      throw error;
+    }
+    const workspaceId = main.workspaceId;
+    if (!workspaceId) {
+      release();
+      throw new ClusterSendGateError(
+        "Cluster mode requires the main agent to belong to a workspace",
+      );
+    }
+    try {
+      await this.appendClusterUserMessage(agentId, msg);
+    } catch (error) {
+      release();
+      throw error;
+    }
+
+    void this.runClusterInBackground({
+      agentId,
+      text: msg.text,
+      main,
+      workspaceId,
+      release,
+    });
+
+    return { action: "handled", state: { phase: "planning" } };
+  }
+
+  private async appendClusterUserMessage(
+    agentId: string,
+    msg: Extract<SessionInboundMessage, { type: "send_agent_message_request" }>,
+  ): Promise<void> {
+    const item: AgentTimelineItem = { type: "user_message", text: msg.text };
+    if (msg.messageId) {
+      item.messageId = msg.messageId;
+      item.clientMessageId = msg.messageId;
+    }
+    try {
+      await this.agentManager.appendTimelineItem(agentId, item);
+    } catch (error) {
+      this.sessionLogger.error(
+        { agentId, err: error },
+        "agent.session.cluster_user_message_append_failed",
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Background half of the cluster hard path. The main agent snapshot and its
+   * workspace are already resolved synchronously by the send gate; this half
+   * resolves the planning profile, runs planner → spawn via the real
+   * `createAgentCommand` binding, then fans back in: waits for every worker's
+   * turn, gates evidence (at most one bounce per worker), and wakes the main
+   * agent exactly once with the unified review.
+   *
+   * The cluster-start lock is held from planning all the way through the main
+   * review turn; it is released only on every end/error path (outer finally).
+   */
+  private async runClusterInBackground(params: {
+    agentId: string;
+    text: string;
+    main: ManagedAgent;
+    workspaceId: string;
+    release: () => void;
+  }): Promise<void> {
+    const { agentId, text, main, workspaceId, release } = params;
+
+    const report = (runState: ClusterRunState): void => {
+      this.sessionLogger.info({ agentId, phase: runState.phase }, "agent.session.cluster_run");
+    };
+
+    try {
+      const createAgent: BoundCreateAgentCommand = (input) =>
+        createAgentCommand(
+          {
+            agentManager: this.agentManager,
+            agentStorage: this.agentStorage,
+            logger: this.sessionLogger,
+            paseoHome: this.paseoHome,
+            worktreesRoot: this.worktreesRoot,
+            terminalManager: this.terminalManager,
+            providerSnapshotManager: this.providerSnapshotManager,
+            createPaseoWorktree: (worktreeInput, workflowOptions) =>
+              this.createPaseoWorktreeWorkflow(worktreeInput, workflowOptions),
+          },
+          input,
+        );
+
+      const plannerProfile = await resolveClusterWorkerProfile("planning", {
+        paseoHome: this.paseoHome,
+      });
+      if (!plannerProfile?.provider) {
+        throw new Error('Cluster mode is not configured: no provider for role "planning"');
+      }
+
+      const planTask: ClusterPlanTask = (prompt) =>
+        runClusterPlanner({
+          prompt,
+          plannerProvider: plannerProfile.provider,
+          plannerMode: plannerProfile.mode,
+          plannerThinking: plannerProfile.thinking,
+          mainAgent: { cwd: main.cwd, workspaceId },
+          createAgent,
+          agentManager: this.agentManager,
+        });
+
+      // Keep the full spawn result (plan + real UUID mapping) — the review
+      // needs node id ↔ UUID, scope and criteria, not just workerIds.
+      let spawnResult: SpawnClusterWorkersResult | null = null;
+      const spawnTask: ClusterSpawnTask = (plan) =>
+        spawnClusterWorkers({
+          plan,
+          mainAgent: { id: main.id, cwd: main.cwd, workspaceId },
+          createAgent,
+          preferences: { paseoHome: this.paseoHome },
+        }).then((result) => {
+          spawnResult = result;
+          return result;
+        });
+
+      const state = await startClusterRun({
+        prompt: text,
+        paseoToolsEnabled: true,
+        planTask,
+        spawnTask,
+        observer: report,
+      });
+
+      // No early release here: the lock spans planning → spawn → fan-in →
+      // evidence gate → main review. Every exit path below (and the outer
+      // finally) releases it exactly once.
+      if (state.phase === "failed") {
+        await this.appendClusterErrorTimeline(agentId, state.error);
+        return;
+      }
+      if (state.phase !== "running" || spawnResult === null) {
+        this.sessionLogger.warn(
+          { agentId, phase: state.phase },
+          "agent.session.cluster_run_unexpected_phase",
+        );
+        return;
+      }
+
+      report({ phase: "reviewing", workerIds: state.workerIds });
+
+      const review = await runClusterReview({
+        spawnResult,
+        originalUserRequest: text,
+        mainAgentId: agentId,
+        port: this.buildClusterReviewPort(),
+      });
+
+      report(review.final);
+      if (review.final.phase === "failed") {
+        await this.appendClusterErrorTimeline(agentId, review.final.error);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.sessionLogger.error({ agentId, err: error }, "agent.session.cluster_run_failed");
+      await this.appendClusterErrorTimeline(agentId, `Cluster run failed: ${message}`);
+    } finally {
+      release();
+    }
+  }
+
+  /**
+   * Real send/wait dependencies for the cluster review pass. Worker bounces
+   * and the single main review both go through `sendPromptToAgent` with
+   * `unarchive: false` (system-injected, never re-archives).
+   */
+  private buildClusterReviewPort(): ClusterReviewPort {
+    // Structural shim: AgentManager.getAgent returns null, the wait port
+    // expects undefined.
+    const agentManagerPort: ClusterWorkerAgentManagerPort = {
+      getAgent: (agentId) => this.agentManager.getAgent(agentId) ?? undefined,
+      subscribe: (callback, options) => this.agentManager.subscribe(callback, options),
+      getLastAssistantMessage: (agentId) => this.agentManager.getLastAssistantMessage(agentId),
+      agentHasCompletedTurn: (agentId) => this.agentManager.agentHasCompletedTurn(agentId),
+      waitForAgentEvent: (agentId, options) =>
+        this.agentManager.waitForAgentEvent(agentId, options),
+    };
+    return {
+      waitForClusterWorkers: (workerIds) =>
+        waitForClusterWorkers({ workerIds, agentManager: agentManagerPort }),
+      waitForClusterAgentTurn: (agentId) =>
+        waitForClusterAgentTurn({ agentId, agentManager: agentManagerPort }),
+      sendPrompt: async (agentId, prompt) => {
+        await sendPromptToAgent({
+          agentManager: this.agentManager,
+          agentStorage: this.agentStorage,
+          agentId,
+          prompt,
+          unarchive: false,
+          logger: this.sessionLogger,
+        });
+      },
+    };
+  }
+
+  private async appendClusterErrorTimeline(agentId: string, message: string): Promise<void> {
+    try {
+      await this.agentManager.appendTimelineItem(agentId, { type: "error", message });
+    } catch (timelineError) {
+      this.sessionLogger.error(
+        { agentId, err: timelineError },
+        "agent.session.cluster_error_timeline_failed",
+      );
+    }
+  }
+
   private async handleSendAgentMessageRequest(
     msg: Extract<SessionInboundMessage, { type: "send_agent_message_request" }>,
   ): Promise<void> {
@@ -6569,6 +6875,23 @@ export class Session {
         },
         "agent.session.send_agent_message",
       );
+
+      // Cluster gate must sit here — not inside sendPromptToAgent — so MCP,
+      // voice, finish notification, and system envelopes stay unhijacked.
+      const clusterDecision = await this.applyClusterSendGate(agentId, msg);
+      if (clusterDecision.action === "handled") {
+        this.emit({
+          type: "send_agent_message_response",
+          payload: {
+            requestId: msg.requestId,
+            agentId,
+            accepted: true,
+            error: null,
+          },
+        });
+        return;
+      }
+
       let dispatchResult: { outOfBand: boolean };
       try {
         dispatchResult = await sendPromptToAgent({

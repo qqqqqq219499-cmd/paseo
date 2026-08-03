@@ -240,6 +240,13 @@ export const ptBR: TranslationResources = {
       selectAccessibilityLabel: "Select model gateway",
       selectAccessibilityLabelWithValue: "Select model gateway ({{value}})",
     },
+    cluster: {
+      title: "Cluster",
+      on: "On",
+      off: "Off",
+      hint: "Run messages through cluster orchestration",
+      unsupported: "Upgrade your host to enable cluster mode",
+    },
   },
   agentStream: {
     empty: "Comece a conversar com este agente...",

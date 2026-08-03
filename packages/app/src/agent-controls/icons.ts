@@ -11,6 +11,7 @@ import {
   ShieldOff,
   ShieldPlus,
   ShieldQuestionMark,
+  Workflow,
   Zap,
 } from "lucide-react-native";
 import { getModeVisuals, type AgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
@@ -24,6 +25,7 @@ export type AgentControlIcon = ComponentType<AgentControlIconProps>;
 
 export const ThinkingIcon = Brain;
 export const PlanModeIcon = ListTodo;
+export const ClusterIcon = Workflow;
 
 const MODE_ICONS: Record<string, AgentControlIcon> = {
   Bot,

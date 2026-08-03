@@ -23,8 +23,9 @@ export function buildDraftAgentControls(input: {
   features?: DraftAgentControlsProps["features"];
   onSetFeature?: DraftAgentControlsProps["onSetFeature"];
   onDropdownClose?: DraftAgentControlsProps["onDropdownClose"];
+  clusterControl?: DraftAgentControlsProps["clusterControl"];
 }): DraftAgentControlsProps {
-  const { formState, features, onSetFeature, onDropdownClose } = input;
+  const { formState, features, onSetFeature, onDropdownClose, clusterControl } = input;
   return {
     providerDefinitions: formState.providerDefinitions,
     selectedProvider: formState.selectedProvider,
@@ -49,6 +50,7 @@ export function buildDraftAgentControls(input: {
     onRetryModelProvider: formState.refreshProviderModels,
     isRetryingModelProvider: formState.isProviderModelsRefreshing,
     modelSelectorServerId: formState.selectedServerId,
+    ...(clusterControl != null ? { clusterControl } : {}),
   };
 }
 

@@ -1,10 +1,42 @@
-import { describe, expect, it } from "vitest";
-import { resolveDraftKey } from "./input-draft-core";
+import { describe, expect, it, vi } from "vitest";
+import { buildDraftAgentControls, resolveDraftKey } from "./input-draft-core";
+import {
+  isDraftClusterControlAvailable,
+  resolveDraftClusterCreateLabels,
+} from "@/composer/agent-controls/cluster";
+import { CLUSTER_MODE_LABEL, CLUSTER_MODE_ON_VALUE } from "@getpaseo/protocol/agent-labels";
 import {
   buildDraftCommandConfig,
   resolveEffectiveComposerModelId,
   resolveEffectiveComposerThinkingOptionId,
 } from "@/provider-selection/provider-selection";
+import type { UseAgentFormStateResult } from "@/hooks/use-agent-form-state";
+
+function stubFormState(overrides: Partial<UseAgentFormStateResult> = {}): UseAgentFormStateResult {
+  return {
+    providerDefinitions: [],
+    selectedProvider: "codex",
+    setProviderFromUser: vi.fn(),
+    modeOptions: [],
+    selectedMode: "",
+    setModeFromUser: vi.fn(),
+    availableModels: [],
+    selectedModel: "",
+    setModelFromUser: vi.fn(),
+    isModelLoading: false,
+    modelSelectorProviders: [],
+    isAllModelsLoading: false,
+    setProviderAndModelFromUser: vi.fn(),
+    availableThinkingOptions: [],
+    selectedThinkingOptionId: "",
+    setThinkingOptionFromUser: vi.fn(),
+    refetchProviderModelsIfStale: vi.fn(),
+    refreshProviderModels: vi.fn(),
+    isProviderModelsRefreshing: false,
+    selectedServerId: "host-1",
+    ...overrides,
+  } as UseAgentFormStateResult;
+}
 
 describe("resolveDraftKey", () => {
   it("returns a string draft key unchanged", () => {
@@ -159,5 +191,40 @@ describe("buildDraftComposerCommandConfig", () => {
       model: "gpt-5.4",
       thinkingOptionId: "high",
     });
+  });
+});
+
+describe("draft cluster control wiring", () => {
+  it("includes clusterControl on draft agent controls when the host supports clusterMode", () => {
+    const onToggle = vi.fn();
+    const clusterControl = { enabled: false, onToggle };
+    const supported = isDraftClusterControlAvailable(true);
+    expect(supported).toBe(true);
+
+    const controls = buildDraftAgentControls({
+      formState: stubFormState(),
+      clusterControl: supported ? clusterControl : null,
+    });
+
+    expect(controls.clusterControl).toEqual(clusterControl);
+  });
+
+  it("omits clusterControl when the host does not support clusterMode", () => {
+    const supported = isDraftClusterControlAvailable(false);
+    expect(supported).toBe(false);
+
+    const controls = buildDraftAgentControls({
+      formState: stubFormState(),
+      clusterControl: supported ? { enabled: true, onToggle: vi.fn() } : null,
+    });
+
+    expect(controls.clusterControl).toBeUndefined();
+  });
+
+  it("maps create labels: enabled → paseo.cluster-mode=on, disabled → {}", () => {
+    expect(resolveDraftClusterCreateLabels(true)).toEqual({
+      [CLUSTER_MODE_LABEL]: CLUSTER_MODE_ON_VALUE,
+    });
+    expect(resolveDraftClusterCreateLabels(false)).toEqual({});
   });
 });

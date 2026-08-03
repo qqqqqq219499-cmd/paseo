@@ -88,6 +88,7 @@ export const Search = StubIcon;
 export const Server = StubIcon;
 export const Settings = StubIcon;
 export const Settings2 = StubIcon;
+export const Workflow = StubIcon;
 export const ShieldAlert = StubIcon;
 export const ShieldCheck = StubIcon;
 export const ShieldOff = StubIcon;

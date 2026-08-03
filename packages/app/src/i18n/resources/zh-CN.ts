@@ -240,6 +240,13 @@ export const zhCN: TranslationResources = {
       selectAccessibilityLabel: "选择模型网关",
       selectAccessibilityLabelWithValue: "选择模型网关（{{value}}）",
     },
+    cluster: {
+      title: "集群",
+      on: "开启",
+      off: "关闭",
+      hint: "消息走集群编排执行",
+      unsupported: "升级 Host 以启用集群模式",
+    },
   },
   agentStream: {
     empty: "开始和这个 Agent 对话...",

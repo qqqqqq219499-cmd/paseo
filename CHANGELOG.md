@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added session-level Cluster mode: long tasks are planned, split across configured agent models, fanned in after every worker finishes, checked for evidence, and returned through one consolidated main-agent review.
+- Added Cluster controls for existing agents and new-agent drafts, gated by host capability and persisted through the `paseo.cluster-mode` label.
+
+### Fixed
+
+- Duplicate model rows no longer crash Command Center registration; identical provider/model choices are deduplicated and duplicate contribution IDs are skipped safely.
+
 ## 0.2.5 - 2026-07-30
 
 ### Fixed

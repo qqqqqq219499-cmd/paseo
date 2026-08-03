@@ -82,6 +82,11 @@ import { ComposerControlLayoutProvider } from "@/composer/agent-controls/layout-
 import { ComposerToolbarGlyph } from "@/composer/agent-controls/glyph";
 import { AgentControlTrigger } from "@/composer/agent-controls/control";
 import { CompactModelSheet } from "@/composer/agent-controls/model-sheet";
+import {
+  ClusterControlTrigger,
+  useLiveClusterControl,
+  type ClusterControlValue,
+} from "@/composer/agent-controls/cluster-control";
 
 interface AgentControlOption {
   id: string;
@@ -116,6 +121,7 @@ interface ControlledAgentControlsProps {
   onRetryModelProvider?: (provider: AgentProvider) => void;
   isRetryingModelProvider?: boolean;
   modeControl?: AgentModeControlValue | null;
+  clusterControl?: ClusterControlValue | null;
   modelSelectorServerId?: string | null;
   isCompactLayout?: boolean;
 }
@@ -146,6 +152,8 @@ export interface DraftAgentControlsProps {
   disabled?: boolean;
   modelSelectorServerId?: string | null;
   isCompactLayout?: boolean;
+  /** Present only when the selected host advertises `features.clusterMode`. */
+  clusterControl?: ClusterControlValue | null;
 }
 
 interface AgentControlsProps {
@@ -215,19 +223,22 @@ function resolveHasAnyControl({
   thinkingOptions,
   features,
   hasMode,
+  hasCluster,
 }: {
   providerOptions: AgentControlOption[] | undefined;
   canSelectModel: boolean;
   thinkingOptions: AgentControlOption[] | undefined;
   features: AgentFeature[] | undefined;
   hasMode: boolean;
+  hasCluster: boolean;
 }) {
   return (
     Boolean(providerOptions?.length) ||
     canSelectModel ||
     Boolean(thinkingOptions?.length) ||
     Boolean(features?.length) ||
-    hasMode
+    hasMode ||
+    hasCluster
   );
 }
 
@@ -429,6 +440,7 @@ function ControlledAgentControls({
   onRetryModelProvider,
   isRetryingModelProvider = false,
   modeControl,
+  clusterControl,
   modelSelectorServerId = null,
   isCompactLayout,
 }: ControlledAgentControlsProps) {
@@ -477,6 +489,7 @@ function ControlledAgentControls({
     thinkingOptions,
     features,
     hasMode: modeControl !== null && modeControl !== undefined,
+    hasCluster: clusterControl !== null && clusterControl !== undefined,
   });
   const featureControls = useMemo(
     () =>
@@ -705,6 +718,7 @@ function ControlledAgentControls({
             handleNestedOpenChange={handleSheetOpenChange}
             renderThinkingOption={renderThinkingOption}
             modeControl={modeControl}
+            clusterControl={clusterControl}
             presentation={presentation}
             glyphSize={layoutContextValue.glyphSize}
             activeSheet={activeSheet}
@@ -742,6 +756,7 @@ function ControlledAgentControls({
             handleOpenChange={handleSheetOpenChange}
             renderThinkingOption={renderThinkingOption}
             modeControl={modeControl}
+            clusterControl={clusterControl}
             glyphSize={layoutContextValue.glyphSize}
             modelSelectorServerId={modelSelectorServerId}
           />
@@ -798,6 +813,7 @@ interface DesktopAgentControlsContentProps {
     onPress: () => void;
   }) => ReactElement;
   modeControl?: AgentModeControlValue | null;
+  clusterControl?: ClusterControlValue | null;
   presentation: ComposerControlPresentation;
   glyphSize: number;
   activeSheet: ActiveSheet;
@@ -852,6 +868,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     handleNestedOpenChange,
     renderThinkingOption,
     modeControl,
+    clusterControl,
     presentation,
     glyphSize,
     activeSheet,
@@ -969,6 +986,8 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
 
       {modeControl ? <AgentModeControl {...modeControl} onClose={onDropdownClose} /> : null}
 
+      {clusterControl ? <ClusterControlTrigger {...clusterControl} /> : null}
+
       {presentation.aggregateFeatures && features?.length ? (
         <>
           <Pressable
@@ -1052,6 +1071,7 @@ interface SheetAgentControlsContentProps {
     onPress: () => void;
   }) => ReactElement;
   modeControl?: AgentModeControlValue | null;
+  clusterControl?: ClusterControlValue | null;
   glyphSize: number;
   modelSelectorServerId: string | null;
 }
@@ -1087,6 +1107,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
     handleOpenChange,
     renderThinkingOption,
     modeControl,
+    clusterControl,
     glyphSize,
     modelSelectorServerId,
   } = props;
@@ -1141,6 +1162,8 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
       ) : null}
 
       {modeControl ? <AgentModeControl {...modeControl} surface="sheet" /> : null}
+
+      {clusterControl ? <ClusterControlTrigger {...clusterControl} surface="sheet" /> : null}
 
       {(features ?? []).map((feature) => (
         <SheetFeatureItem
@@ -1439,6 +1462,7 @@ export const AgentControls = memo(function AgentControls({
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   const toast = useToast();
   const modeControl = useLiveAgentModeControl(serverId, agentId);
+  const clusterControl = useLiveClusterControl(serverId, agentId);
   const commandCenterModes = toCommandCenterModes(modeControl);
   const modeProviderDefinitions = getModeProviderDefinitions(modeControl);
 
@@ -1663,6 +1687,7 @@ export const AgentControls = memo(function AgentControls({
       onDropdownClose={onDropdownClose}
       disabled={!client}
       modeControl={modeControl}
+      clusterControl={clusterControl}
       modelSelectorServerId={serverId}
       isCompactLayout={isCompactLayout}
     />
@@ -1695,6 +1720,7 @@ export function DraftAgentControls({
   disabled = false,
   modelSelectorServerId = null,
   isCompactLayout,
+  clusterControl = null,
 }: DraftAgentControlsProps) {
   const { preferences, updatePreferences } = useFormPreferences();
   const { t } = useTranslation();
@@ -1747,6 +1773,16 @@ export function DraftAgentControls({
     [selectedProvider, providerDefinitions, modeOptions, selectedMode, onSelectMode, disabled],
   );
 
+  const effectiveClusterControl = useMemo<ClusterControlValue | null>(() => {
+    if (!clusterControl) {
+      return null;
+    }
+    return {
+      ...clusterControl,
+      disabled: disabled || Boolean(clusterControl.disabled),
+    };
+  }, [clusterControl, disabled]);
+
   return (
     <ControlledAgentControls
       provider={selectedProvider ?? ""}
@@ -1769,6 +1805,7 @@ export function DraftAgentControls({
       isRetryingModelProvider={isRetryingModelProvider}
       disabled={disabled}
       modeControl={modeControl}
+      clusterControl={effectiveClusterControl}
       modelSelectorServerId={modelSelectorServerId}
       isCompactLayout={isCompactLayout}
     />

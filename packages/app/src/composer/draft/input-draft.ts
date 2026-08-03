@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { UserComposerAttachment } from "@/attachments/types";
 import type { DraftAgentControlsProps } from "@/composer/agent-controls";
+import type { ClusterControlValue } from "@/composer/agent-controls/cluster-control";
+import { isDraftClusterControlAvailable } from "@/composer/agent-controls/cluster";
 import type { DraftCommandConfig } from "@/hooks/use-agent-commands-query";
 import {
   useAgentFormState,
@@ -22,6 +24,7 @@ import {
 } from "@/provider-selection/provider-selection";
 import { useDraftStore } from "@/stores/draft-store";
 import { toDraftInputIfReady } from "@/stores/draft-store/state";
+import { useSessionStore } from "@/stores/session-store";
 
 type AttachmentUpdater =
   | UserComposerAttachment[]
@@ -221,6 +224,36 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
     ],
   );
 
+  const [clusterModeEnabled, setClusterModeEnabled] = useState(false);
+  const clusterModeSupported = useSessionStore((state) => {
+    const serverId = formState.selectedServerId;
+    if (!serverId) {
+      return false;
+    }
+    return state.sessions[serverId]?.serverInfo?.features?.clusterMode === true;
+  });
+  const clusterControlAvailable = isDraftClusterControlAvailable(clusterModeSupported);
+
+  useEffect(() => {
+    if (!clusterControlAvailable) {
+      setClusterModeEnabled(false);
+    }
+  }, [clusterControlAvailable]);
+
+  const handleClusterModeToggle = useCallback((enabled: boolean) => {
+    setClusterModeEnabled(enabled);
+  }, []);
+
+  const draftClusterControl = useMemo<ClusterControlValue | null>(() => {
+    if (!clusterControlAvailable) {
+      return null;
+    }
+    return {
+      enabled: clusterModeEnabled,
+      onToggle: handleClusterModeToggle,
+    };
+  }, [clusterControlAvailable, clusterModeEnabled, handleClusterModeToggle]);
+
   const composerState = useMemo<DraftComposerState | null>(() => {
     if (!composerOptions) {
       return null;
@@ -236,12 +269,14 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
         formState,
         features: draftFeatures,
         onSetFeature: setDraftFeatureValue,
+        clusterControl: draftClusterControl,
       }),
       commandDraftConfig,
     };
   }, [
     commandDraftConfig,
     composerOptions,
+    draftClusterControl,
     effectiveModelId,
     effectiveThinkingOptionId,
     draftFeatures,
