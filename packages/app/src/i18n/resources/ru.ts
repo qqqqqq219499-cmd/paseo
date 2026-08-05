@@ -453,7 +453,7 @@ export const ru: TranslationResources = {
       openFile: "Открыть файл",
       copyPath: "Копировать путь",
       download: "Скачать",
-      addToChat: "Добавить в чат…",
+      addToChat: "Добавить в чат",
       moreActions: "Дополнительные действия",
     },
     fileExplorer: {
@@ -923,6 +923,14 @@ export const ru: TranslationResources = {
           viewPullRequest: "Открыть",
           openOn: "Открыть на {{brand}}",
         },
+        checksSummary: {
+          passedLabel: "успешно",
+          failedLabel: "ошибка",
+          runningLabel: "выполняется",
+          passedAccessible: "Проверки пройдены",
+          failedAccessible: "Проверки не пройдены",
+          runningAccessible: "Проверки выполняются",
+        },
         sections: {
           checks: "Чеки",
           pipeline: "Пайплайн",
@@ -970,6 +978,33 @@ export const ru: TranslationResources = {
     },
   },
   sidebar: {
+    display: {
+      trigger: "Настройки отображения",
+      heading: "Отображение",
+      grouping: {
+        label: "Группировка",
+        project: "Проект",
+        status: "Статус",
+      },
+      titleSource: {
+        label: "Заголовок",
+        title: "Заголовок",
+        branch: "Имя ветки",
+      },
+      show: {
+        label: "Показывать",
+        host: "Хост",
+        changeRequest: "Pull request",
+        checks: "Проверки",
+        scripts: "Скрипты",
+        diff: "Статистика изменений",
+        timestamp: "Последняя активность",
+      },
+      hostFilter: {
+        label: "Хост",
+        all: "Все хосты",
+      },
+    },
     pinned: {
       title: "Закреплённые",
     },

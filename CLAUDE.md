@@ -36,6 +36,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/new-theme.md](docs/new-theme.md)                               | "New theme" toggle — standalone light look, dedicated `newTheme` Unistyles key, where overrides go                             |
 | [docs/port-from-paseo-reclaude.md](docs/port-from-paseo-reclaude.md) | 从 `E:\paseo`（reclaude 二开）搬到 official 的对照表：新主题 / 拖窗 / 汉化源路径与落点                                         |
 | [docs/floating-panels.md](docs/floating-panels.md)                   | Anchored popovers — Portal/Modal escape for Android, lifecycle gates, keyboard-shared-value, status-bar offset, the flash      |
+| [docs/menus.md](docs/menus.md)                                       | The menu engine — popover vs sheet, submenu pages, hover intent, when a decision earns a submenu                               |
 | [docs/expo-router.md](docs/expo-router.md)                           | Expo Router route ownership, startup restore, and native blank-screen gotchas                                                  |
 | [docs/file-icons.md](docs/file-icons.md)                             | Material icon theme integration for the file explorer                                                                          |
 | [docs/providers.md](docs/providers.md)                               | Adding a new agent provider end-to-end                                                                                         |

@@ -818,7 +818,6 @@ const SidebarSessionsGroupView = memo(function SidebarSessionsGroupView({
               <ContextMenuContent
                 align="start"
                 width={200}
-                mobileMode="sheet"
                 testID={`sidebar-sessions-group-context-${group.key}`}
               >
                 <ContextMenuItem

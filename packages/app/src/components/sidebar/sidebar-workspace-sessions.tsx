@@ -94,6 +94,7 @@ export const SidebarSessionRow = memo(function SidebarSessionRow({
     void Clipboard.setStringAsync(session.id)
       .then(() => {
         toast.copied(t("workspace.tabs.toasts.agentIdCopiedLabel"));
+        return undefined;
       })
       .catch(() => {
         toast.error(t("workspace.tabs.toasts.copyFailed"));
@@ -155,7 +156,6 @@ export const SidebarSessionRow = memo(function SidebarSessionRow({
       <ContextMenuContent
         align="start"
         width={200}
-        mobileMode="sheet"
         testID={`sidebar-session-context-${session.id}`}
       >
         <ContextMenuItem

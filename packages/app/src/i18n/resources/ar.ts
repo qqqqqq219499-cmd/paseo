@@ -450,7 +450,7 @@ export const ar: TranslationResources = {
       openFile: "افتح الملف",
       copyPath: "نسخ المسار",
       download: "تحميل",
-      addToChat: "إضافة إلى الدردشة…",
+      addToChat: "إضافة إلى الدردشة",
       moreActions: "المزيد من الإجراءات",
     },
     fileExplorer: {
@@ -901,6 +901,14 @@ export const ar: TranslationResources = {
           viewPullRequest: "عرض",
           openOn: "فتح على {{brand}}",
         },
+        checksSummary: {
+          passedLabel: "نجح",
+          failedLabel: "فشل",
+          runningLabel: "قيد التشغيل",
+          passedAccessible: "نجحت الفحوصات",
+          failedAccessible: "فشلت الفحوصات",
+          runningAccessible: "الفحوصات قيد التشغيل",
+        },
         sections: {
           checks: "الشيكات",
           pipeline: "خط المعالجة",
@@ -948,6 +956,33 @@ export const ar: TranslationResources = {
     },
   },
   sidebar: {
+    display: {
+      trigger: "تفضيلات العرض",
+      heading: "العرض",
+      grouping: {
+        label: "التجميع",
+        project: "المشروع",
+        status: "الحالة",
+      },
+      titleSource: {
+        label: "العنوان",
+        title: "العنوان",
+        branch: "اسم الفرع",
+      },
+      show: {
+        label: "إظهار",
+        host: "المضيف",
+        changeRequest: "طلب السحب",
+        checks: "الفحوصات",
+        scripts: "البرامج النصية",
+        diff: "إحصائيات الفروق",
+        timestamp: "آخر نشاط",
+      },
+      hostFilter: {
+        label: "المضيف",
+        all: "كل المضيفين",
+      },
+    },
     pinned: {
       title: "المثبتة",
     },

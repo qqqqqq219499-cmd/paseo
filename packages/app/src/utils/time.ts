@@ -14,25 +14,72 @@ export function formatTimeAgo(date: Date, now: Date = new Date()): string {
   if (diffSec < 10) {
     return i18n.t("time.justNow");
   }
-
   if (diffMin < 1) {
     return i18n.t("time.secondsAgo", { count: diffSec });
   }
-
   if (diffHour < 1) {
     return i18n.t("time.minutesAgo", { count: diffMin });
   }
-
   if (diffDay < 1) {
     return i18n.t("time.hoursAgo", { count: diffHour });
   }
-
   if (diffDay < 7) {
     return i18n.t("time.daysAgo", { count: diffDay });
   }
-
-  // For older dates, show abbreviated month and day in the active locale
   return date.toLocaleDateString(i18n.language, { month: "short", day: "numeric" });
+}
+
+/**
+ * How often a compact label can change, which is all a caller needs to know to keep it honest.
+ * `static` means it never will again.
+ */
+export type RelativeTimeResolution = "minute" | "hour" | "day" | "static";
+
+export interface CompactTimeAgo {
+  label: string;
+  resolution: RelativeTimeResolution;
+}
+
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+/** Past a week the elapsed count stops meaning anything; the date itself is more use. */
+const ABSOLUTE_AFTER_MS = 7 * DAY_MS;
+
+/**
+ * The same instant with the prose removed, for somewhere with no room for it 鈥?a dense list
+ * where the column is understood to be a timestamp and "ago" is the only word on the line.
+ * Examples: "now", "5m", "2h", "3d", "Jan 15".
+ *
+ * Deliberately never sub-minute. A seconds label is only correct for the second it was rendered,
+ * so it either lies or forces a once-a-second re-render of a list that has nothing new to say.
+ * Everything under a minute is "now", which is both true and stable.
+ *
+ * The resolution comes back with the label so a caller can wake at the rate the label actually
+ * changes instead of guessing 鈥?see `useCompactTimeAgo`.
+ */
+export function describeCompactTimeAgo(date: Date, now: Date = new Date()): CompactTimeAgo {
+  const elapsedMs = now.getTime() - date.getTime();
+
+  if (elapsedMs < MINUTE_MS) {
+    return { label: "now", resolution: "minute" };
+  }
+  if (elapsedMs < HOUR_MS) {
+    return { label: `${Math.floor(elapsedMs / MINUTE_MS)}m`, resolution: "minute" };
+  }
+  if (elapsedMs < DAY_MS) {
+    return { label: `${Math.floor(elapsedMs / HOUR_MS)}h`, resolution: "hour" };
+  }
+  if (elapsedMs < ABSOLUTE_AFTER_MS) {
+    return { label: `${Math.floor(elapsedMs / DAY_MS)}d`, resolution: "day" };
+  }
+
+  const month = date.toLocaleDateString("en-US", { month: "short" });
+  return { label: `${month} ${date.getDate()}`, resolution: "static" };
+}
+
+export function formatCompactTimeAgo(date: Date, now: Date = new Date()): string {
+  return describeCompactTimeAgo(date, now).label;
 }
 
 function isSameLocalDay(a: Date, b: Date): boolean {
