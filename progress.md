@@ -500,3 +500,139 @@
 - Merge verification and lint/test fixes delegated to Grok worker agent e53f1c9f (cluster mode); main agent independently re-ran lint, typecheck, and spot test suites before committing.
 - Untracked scratch left alone: `.tmp*`, `vitest-sidebar.*`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.tools/`, `docs/添加服务器Grok.md`, `scripts/dev-portable.ps1`, `scripts/sync-portable-on-exit.ps1`, `patches/app-builder-lib+26.8.1.patch`.
 - Rollback: `git revert -m 1 <merge-commit>`.
+
+## 2026-07-30 - Task: Unify Claude and Grok prompt, skills, and MCPProxy configuration
+
+### What was done
+
+- Added a Desktop shared-context integration with `~/.ai-shared/AGENTS.md` and `~/.ai-shared/skills/` as the user-maintained source, with drift detection and confirmed synchronization to Claude and Grok.
+- Preserved provider-only skill files, backed up changed prompt/MCP files, protected Windows hardlinks and junctions, and deliberately kept existing direct MCP entries.
+- Added a Settings > Integrations row, IPC contract, status hook, Chinese/English UI copy, and fallback keys for all supported locales.
+- Restored the existing `MCPProxy Gateway` scheduled task, connected Claude and Grok to `http://127.0.0.1:8933/mcp/`, and added MCPProxy discovery rules to the canonical prompt.
+- Migrated this workstation to the shared source and synchronized the real Claude/Grok configuration to `ready`.
+
+### Testing
+
+- TDD red phase: the new Desktop suite initially failed because `./operations` did not exist; the App suite initially failed because `useSharedContextStatus` did not exist.
+- `cd packages/desktop && npx vitest run src/integrations/shared-context/operations.test.ts src/integrations/skills/sync.test.ts` exited 0: 2 files, 16 tests passed.
+- `cd packages/app && npx vitest run src/desktop/hooks/use-install-status.test.tsx src/i18n/resources.test.ts` exited 0: 2 files, 43 tests passed.
+- `npm run typecheck --workspace=@getpaseo/desktop` and `npm run typecheck --workspace=@getpaseo/app` both exited 0.
+- Targeted `oxlint` reported 0 warnings/errors; targeted `oxfmt --check` passed for all 22 changed source/doc files; `git diff --check` exited 0.
+- Real `syncSharedContext()` returned `state=ready` with prompt, skills, and MCP booleans true for Claude and Grok.
+- MCPProxy survived its periodic refresh with 11 connected upstreams and 204 indexed tools; a real `retrieve_tools` query for `闲鱼 订单 查询` returned `xianyu-ops:xianyu_query_order`.
+- Isolated Desktop dev ran at Metro `http://localhost:8081`, CDP `127.0.0.1:9231`, daemon `127.0.0.1:6791`. Page-level CDP checks at 1200x800 and 900x700 found no horizontal overflow, no runtime exceptions, and no overlap between the shared-context text and Sync button. Screenshots: `%TEMP%\paseo-shared-context-dev\integrations-1200x800.png` and `integrations-900x700.png`.
+
+### Notes
+
+- `packages/desktop/src/integrations/shared-context/{index.ts,operations.ts,paths.ts}` - added shared source paths, status detection, backups, prompt/skill projection, and Claude/Grok MCPProxy configuration.
+- `packages/desktop/src/integrations/shared-context/operations.test.ts` - covered ready status, first migration, backups, provider-only skill preservation, stale managed-file cleanup, and missing prompt failure.
+- `packages/desktop/src/integrations/skills/sync.ts` - exposed the existing directory synchronizer and added a read-only source/target match helper for real reuse.
+- `packages/desktop/src/daemon/daemon-manager.ts` - registered shared-context status and sync IPC commands.
+- `packages/app/src/desktop/daemon/desktop-daemon.ts` - added the renderer-side shared-context contract and response validation.
+- `packages/app/src/desktop/hooks/use-install-status.ts` and `use-install-status.test.tsx` - added query/mutation state and regression coverage.
+- `packages/app/src/desktop/components/integrations-section.tsx` - added the Shared AI context row and confirmation flow.
+- `packages/app/test-stubs/lucide-react-native.ts` - added the Share2 icon test stub.
+- `packages/app/src/i18n/resources/{en,zh-CN,ar,es,fr,ja,pt-BR,ru}.ts` and `resources.test.ts` - added UI/error copy and locale-key parity coverage.
+- `docs/shared-ai-context.md` - documented the canonical source, backup semantics, scope, MCPProxy discovery, and rollback.
+- `docs/windows-mcpproxy-startup.md` - documented the disabled-task failure mode and real discovery readiness check.
+- `progress.md` - appended this implementation and verification record.
+- Claude model-level tool invocation remains unverified because its OAuth session is expired. Grok model-level invocation remains unverified because the current team returned 403/no credits. Both native MCP connection checks passed; old direct MCP entries remain available until model-level verification is possible.
+- Repo rollback point: `4b26517a6`. Restore tracked files with `git restore -- docs/windows-mcpproxy-startup.md packages/desktop/src/integrations/skills/sync.ts packages/desktop/src/daemon/daemon-manager.ts packages/app/test-stubs/lucide-react-native.ts packages/app/src/desktop/components/integrations-section.tsx packages/app/src/desktop/daemon/desktop-daemon.ts packages/app/src/desktop/hooks/use-install-status.ts packages/app/src/desktop/hooks/use-install-status.test.tsx packages/app/src/i18n/resources.test.ts packages/app/src/i18n/resources/ar.ts packages/app/src/i18n/resources/en.ts packages/app/src/i18n/resources/es.ts packages/app/src/i18n/resources/fr.ts packages/app/src/i18n/resources/ja.ts packages/app/src/i18n/resources/pt-BR.ts packages/app/src/i18n/resources/ru.ts packages/app/src/i18n/resources/zh-CN.ts progress.md`; remove new files with `Remove-Item -LiteralPath docs/shared-ai-context.md,packages/desktop/src/integrations/shared-context/index.ts,packages/desktop/src/integrations/shared-context/operations.ts,packages/desktop/src/integrations/shared-context/operations.test.ts,packages/desktop/src/integrations/shared-context/paths.ts`.
+- Workstation rollback: restore `~/.claude/CLAUDE.md.paseo-backup-20260730T092127.471Z` and `~/.grok/AGENTS.md.paseo-backup-20260730T092127.471Z`; restore `.claude.json.bak.20260730-170112` and `~/.grok/config.toml.bak-mcpproxy-20260730-170125`; remove `~/.ai-shared/AGENTS.md`; run `Disable-ScheduledTask -TaskName "MCPProxy Gateway"` if the original disabled startup state is required.
+- Final drift follow-up: isolated the repeatedly changing files to `~/.ai-shared/skills/.system/` (Codex/OpenAI-managed system skills), excluded that provider-private top-level directory from shared projection, and added a regression test. The final Desktop count is 17 passing tests (superseding the earlier 16-test line); real status remained `ready` after a 15-second post-sync wait.
+
+## 2026-07-30 - Task: Generalize shared AI context to all providers and detected native clients
+
+### What was done
+
+- Replaced the Claude/Grok-only target model with an adapter registry for Claude, Codex, Grok, Kimi Code, Gemini CLI, Hermes, and Cursor Agent. Unsupported native capabilities are reported explicitly instead of being treated as synchronized.
+- Added a provider-independent Paseo runtime layer so every launched provider receives the canonical prompt, shared skills location, and MCPProxy entry. ACP providers receive the same context in the first-turn system envelope.
+- Preserved native client differences at the adapter boundary: hardlinked prompt files, linked or configured skills directories, CLI or structured MCP configuration, Windows `.cmd` execution, provider-only skill migration, and timestamped backups.
+- Generalized the Desktop IPC contract and Settings UI to report detected-provider counts rather than naming two clients.
+- Migrated this workstation to `~/.ai-shared`: seven native clients are detected; six native prompt files share the canonical file, Cursor reports its missing global prompt as unsupported, and every detected client's supported skills/MCP capabilities are synchronized.
+
+### Testing
+
+- `cd packages/desktop && npx vitest run src/integrations/shared-context/operations.test.ts src/integrations/shared-context/paths.test.ts src/integrations/skills/sync.test.ts` exited 0: 3 files, 21 tests passed.
+- `cd packages/server && npx vitest run src/server/agent/runtime-mcp-config.test.ts src/server/agent/agent-manager.test.ts src/server/agent/providers/acp-agent.test.ts` exited 0: 3 files, 251 tests passed.
+- `cd packages/app && npx vitest run src/desktop/daemon/desktop-daemon.shared-context.test.ts src/desktop/hooks/use-install-status.test.tsx src/i18n/resources.test.ts` exited 0: 3 files, 44 tests passed.
+- `npm run typecheck --workspace=@getpaseo/desktop`, `npm run typecheck --workspace=@getpaseo/server`, and `npm run typecheck --workspace=@getpaseo/app` all exited 0.
+- Targeted `oxlint` completed with 0 warnings/errors; targeted `oxfmt --check` passed 32 files.
+- `npm run build:server:clean` and `cd packages/desktop && npm run build:main` both exited 0.
+- Real Desktop IPC returned `state=ready` for seven detected clients. The Settings page displayed `检测到的 7 个 AI 客户端已使用共享上下文` and `已同步` after the CLI probes completed.
+- CDP checks at 1200x800 and 900x700 found no horizontal overflow or overlap; screenshots are `%TEMP%\paseo-shared-context-all-ai-1200x800.png` and `%TEMP%\paseo-shared-context-all-ai-900x700.png`.
+- All seven prompt paths had SHA-256 `5E4C837C238B7AA9F1D84D65881E234F3EDD21A5E6B76325CE8511C9879CA7CA`; all conventional skills paths resolved through directory links to `~/.ai-shared/skills`.
+- MCPProxy remained live on port 8933. A real natural-language `retrieve_tools` request returned `xianyu-ops:xianyu_query_order`, proving upstream discovery rather than only `/healthz` reachability.
+
+### Notes
+
+- `packages/desktop/src/integrations/shared-context/index.ts` - exports the generalized shared-context integration.
+- `packages/desktop/src/integrations/shared-context/paths.ts` - defines canonical paths and the installed native-client adapter registry.
+- `packages/desktop/src/integrations/shared-context/paths.test.ts` - covers installed client detection and Windows `.cmd` wrapper resolution.
+- `packages/desktop/src/integrations/shared-context/operations.ts` - implements generic status, migration, backup, link, command, and structured MCP behavior.
+- `packages/desktop/src/integrations/shared-context/operations.test.ts` - covers generic providers, unsupported capabilities, stderr-based CLI output, structured configs, and idempotent migration.
+- `packages/desktop/src/integrations/skills/sync.ts` - exposes reusable skill synchronization/matching while excluding provider-private `.system` files.
+- `packages/desktop/src/daemon/daemon-manager.ts` - exposes shared-context status and synchronization through Desktop IPC.
+- `packages/server/src/server/agent/runtime-shared-context.ts` - resolves the canonical runtime prompt, skills, MCPProxy URL, and known native prompt projections.
+- `packages/server/src/server/agent/runtime-mcp-config.ts` - injects MCPProxy into launch-only MCP configuration while preserving explicit overrides.
+- `packages/server/src/server/agent/runtime-mcp-config.test.ts` - verifies generic MCPProxy injection and override behavior.
+- `packages/server/src/server/agent/agent-manager.ts` - injects canonical context for every provider family and suppresses duplicate prompt bodies for shared hardlinks.
+- `packages/server/src/server/agent/agent-manager.test.ts` - verifies launch-only prompt, skills, MCP, derived-provider, and hardlink-deduplication behavior.
+- `packages/server/src/server/agent/providers/acp-agent.ts` - adds the shared runtime context to the first ACP turn.
+- `packages/server/src/server/agent/providers/acp-agent.test.ts` - verifies ACP first-turn context and subsequent-turn behavior.
+- `packages/server/src/server/bootstrap.ts` - resolves shared context once and passes it into AgentManager.
+- `packages/app/src/desktop/daemon/desktop-daemon.ts` - validates the generic provider-capability IPC response.
+- `packages/app/src/desktop/daemon/desktop-daemon.shared-context.test.ts` - covers the renderer contract including unsupported capabilities.
+- `packages/app/src/desktop/hooks/use-install-status.ts` - loads, refreshes, and synchronizes generic shared-context status.
+- `packages/app/src/desktop/hooks/use-install-status.test.tsx` - verifies shared-context query/mutation state updates.
+- `packages/app/src/desktop/components/integrations-section.tsx` - renders provider-neutral counts, drift, offline, and synchronized states.
+- `packages/app/src/i18n/resources.test.ts` - verifies locale key parity for the new UI copy.
+- `packages/app/src/i18n/resources/ar.ts` - adds Arabic-fallback shared-context labels.
+- `packages/app/src/i18n/resources/en.ts` - adds English provider-neutral shared-context labels.
+- `packages/app/src/i18n/resources/es.ts` - adds Spanish-fallback shared-context labels.
+- `packages/app/src/i18n/resources/fr.ts` - adds French-fallback shared-context labels.
+- `packages/app/src/i18n/resources/ja.ts` - adds Japanese-fallback shared-context labels.
+- `packages/app/src/i18n/resources/pt-BR.ts` - adds Portuguese-fallback shared-context labels.
+- `packages/app/src/i18n/resources/ru.ts` - adds Russian-fallback shared-context labels.
+- `packages/app/src/i18n/resources/zh-CN.ts` - adds Chinese provider-neutral shared-context labels.
+- `packages/app/test-stubs/lucide-react-native.ts` - adds the Share2 icon test stub used by the integration row.
+- `docs/shared-ai-context.md` - documents runtime coverage, native adapters, migration, backups, and MCPProxy readiness.
+- `docs/windows-mcpproxy-startup.md` - documents Windows startup and discovery-level readiness checks.
+- `progress.md` - appends this all-provider correction without rewriting the earlier Claude/Grok history.
+- Workstation files changed outside the repository: `~/.ai-shared/AGENTS.md`, `~/.ai-shared/skills`, six provider-native prompt hardlinks, native skills projections/configuration, and one `mcpproxy` entry per detected client. The pre-cleanup canonical prompt is backed up at `~/.ai-shared/AGENTS.md.paseo-backup-20260730-all-ai`; changed provider files/directories have timestamped sibling backups.
+- Gemini's MCP entry is configured but its unrelated model endpoint currently returns a duplicated `/v1/v1beta` 404, so a Gemini model-level tool call is not verified. Cursor reports `mcpproxy: ready` before its current CLI exits with a libuv `UV_HANDLE_CLOSING` assertion. These client defects do not change Paseo's `ready` capability state but remain external end-to-end gaps.
+- Repo rollback point: `4b26517a6`. Because several tracked files also contain earlier uncommitted WIP, save the current diff before using `git restore`. Then restore the tracked paths listed above and remove the new files under `packages/desktop/src/integrations/shared-context`, `packages/server/src/server/agent/runtime-shared-context.ts`, `packages/app/src/desktop/daemon/desktop-daemon.shared-context.test.ts`, and `docs/shared-ai-context.md`.
+- Workstation rollback: remove only the projected prompt/skills links and `mcpproxy` entries, then rename the selected `*.paseo-backup-*` siblings back to their original paths. Restore `~/.ai-shared/AGENTS.md.paseo-backup-20260730-all-ai` if the canonical prompt cleanup must also be undone.
+
+## 2026-08-03 - Cluster mode smoke (research dual-worker)
+
+### Goal
+
+Lightweight parallel smoke of self-hosted Paseo cluster: two research workers with separate scopes, then one audit worker to summarize.
+
+### Workers
+
+| Node                  | Agent ID                               | Role / isolation  | Scope (summary)                                                          | Outcome                                                                 |
+| --------------------- | -------------------------------------- | ----------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| w1-cluster-skill-scan | `e3ce877d-3895-4a45-a07b-e5ece38eef23` | research / shared | cluster skill + `cluster-worker.toml` + AGENTS §9                        | ✅ read-only return with paths, hard rules, default/forbidden providers |
+| w2-repo-cluster-code  | `caa268e7-fcb7-4601-bd87-2a3f19b308dd` | research / shared | `packages/server/.../cluster`, create-agent, app swarm UI, related tests | ✅ read-only map of ≥5 source files + test entry points + link summary  |
+| w3-smoke-report       | this agent                             | audit / shared    | Allow: `progress.md`, `docs/shared-ai-context.md` only                   | ✅ append this section                                                  |
+
+### Smoke conclusions
+
+| Check                 | Result                      | Evidence                                                                                                                                                                                                                          |
+| --------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Parallel dispatch** | ✅ **成立**                 | w1 / w2 为图上两个 research 节点、不同 agent id，互不依赖对方产出即可完成；主控侧 dependency 仅要求 w3 等待二者回传，不要求串行互读                                                                                               |
+| **Scope 隔离**        | ✅ **分离达标**             | w1 只扫 `~/.ai-shared` 技能/工人档案；w2 只扫仓库 cluster/create/swarm 代码与测试；双方均声明未写任何文件、未越权改业务源码。w3 Allow 仅 `progress.md`（及允许的 docs 路径）                                                      |
+| **回传可核对**        | ✅ **两项 research 均达标** | 均含 Required return：改动列表（均为空）、验证证据（读过的路径/行数/列目录/git status 说明）、成功标准勾选。w1 给出关键路径表 + ≥3 硬约定 + 默认/禁止渠道；w2 给出 ≥5 源文件职责 + create/cluster/swarm 测试入口清单 + 链路一句话 |
+| **回传格式**          | ✅ 够验收                   | 结构化表 + 结论段；写文件验收约定（磁盘为准）在技能侧已写明；本次 research 无写盘产出，以「改动列表为空 + 证据路径可复查」为门                                                                                                    |
+
+### Gaps / notes（非阻断）
+
+- **文档不一致（派工风险）**：`AGENTS.md` §9 写集群默认 `grok/grok-4.5`；`cluster-worker.toml` + `skills/cluster/SKILL.md` 写代码默认 `opencode/opencode-go/deepseek-v4-flash`。冒烟结论：**派工以 toml 为准**，勿只看 AGENTS 短表。
+- **本轮只验 research 双工并行 + scope + 回传格式**，未覆盖：write-band 实现 fan-out、worktree isolation、`dependsOn` DAG 就绪、`review` bounce、OpenCode `full-access` 无 PendingPermissions 等。代码侧链路已由 w2 索引（send-gate → orchestrator → planner → spawn → wait → review），完整写路径需另开 smoke。
+- **业务源码**：本冒烟三工人均未要求/未报告改动 `packages/**`；本 audit 仅追加本段到 `progress.md`。
+
+### Verdict
+
+集群模式轻量 research 冒烟：**并行成立、scope 分离、w1/w2 回传可核对**。可作为「本机自建集群能派工并收证据」的基线；实现类并行与 review 门仍待专项验证。

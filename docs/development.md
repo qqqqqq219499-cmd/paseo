@@ -25,6 +25,16 @@ desktop launches always force the daemon to production mode.
 
 `npm run dev` is only a shorthand for `npm run dev:server`. Keep `127.0.0.1:6767` for the packaged app and production-style `~/.paseo` state.
 
+### Windows portable update (this machine)
+
+On this workstation the daily desktop install is the portable tree at
+`D:\Apps\Paseo-portable`. Agents must follow
+[windows-portable-update.md](./windows-portable-update.md): build with
+`scripts/dev-portable.ps1 -BuildOnly`, then `schtasks /run /tn PaseoPortableSync`
+so the app auto-syncs and relaunches after the user quits. Do not invent a
+different install path or force-kill the running portable app unless the user
+asks.
+
 ## Nix desktop package
 
 The flake exposes `packages.<system>.desktop` on Linux and macOS:

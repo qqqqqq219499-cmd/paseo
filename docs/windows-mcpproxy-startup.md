@@ -42,6 +42,14 @@ The machine-local operating notes live at
 - `stats.connected_servers=11`;
 - all 11 server rows have `connected=true`.
 
+The scheduled task itself must be `Ready` while the separately launched gateway is running. A
+`Disabled` task leaves the current process usable but prevents recovery after the next login.
+
+Client-visible readiness needs one more check: call `retrieve_tools` with a natural-language
+query and confirm it returns an expected upstream tool. Do not apply annotation filters while
+diagnosing older local Python MCP servers; missing annotations cause `read_only_only` and
+`exclude_destructive` to filter those tools out even when their transports are healthy.
+
 For startup regressions, sample readiness at startup, 30 seconds, and 60 seconds. Compare the
 recursive descendant PID set at the beginning and end of the observation window, scan the new
 log segment for reconnect errors, and monitor for new visible console windows.
