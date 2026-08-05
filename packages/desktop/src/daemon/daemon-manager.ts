@@ -24,6 +24,7 @@ import {
   installCli,
 } from "../integrations/cli-install/index.js";
 import { createSkillsCommandHandlers, getSkillsController } from "../integrations/skills/index.js";
+import { getSharedContextStatus, syncSharedContext } from "../integrations/shared-context/index.js";
 import {
   openLocalTransportSession,
   sendLocalTransportMessage,
@@ -570,6 +571,8 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
     install_cli: () => installCli(),
     get_cli_install_status: () => getCliInstallStatus(),
     ...createSkillsCommandHandlers({ controller: getSkillsController() }),
+    get_shared_context_status: () => getSharedContextStatus(),
+    sync_shared_context: () => syncSharedContext(),
   };
 }
 

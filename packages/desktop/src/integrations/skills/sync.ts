@@ -32,14 +32,23 @@ async function writeFileIfChanged(srcPath: string, dstPath: string): Promise<boo
   return true;
 }
 
-export async function listFilesRecursive(rootDir: string): Promise<string[]> {
+export interface DirectorySyncOptions {
+  ignoredTopLevelNames?: readonly string[];
+}
+
+export async function listFilesRecursive(
+  rootDir: string,
+  options?: DirectorySyncOptions,
+): Promise<string[]> {
   const out: string[] = [];
+  const ignoredTopLevelNames = new Set(options?.ignoredTopLevelNames ?? []);
   async function walk(dir: string): Promise<void> {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
       const rel = path.relative(rootDir, full);
       if (rel === MANAGED_FILES_MANIFEST) continue;
+      if (ignoredTopLevelNames.has(rel.split(path.sep)[0] ?? "")) continue;
       if (entry.isDirectory()) {
         await walk(full);
       } else if (entry.isFile()) {
@@ -132,8 +141,43 @@ async function assertManagedPathsStayInsideSkill(rootDir: string, rels: readonly
   }
 }
 
-async function syncDirectoryFiles(srcDir: string, dstDir: string): Promise<number> {
-  const files = await listFilesRecursive(srcDir);
+export async function directoryMatchesSource(
+  srcDir: string,
+  dstDir: string,
+  options?: DirectorySyncOptions,
+): Promise<boolean> {
+  const [srcRealPath, dstRealPath] = await Promise.all([
+    fs.realpath(srcDir).catch(() => null),
+    fs.realpath(dstDir).catch(() => null),
+  ]);
+  if (!srcRealPath || !dstRealPath) return false;
+  if (srcRealPath === dstRealPath) return true;
+
+  const files = await listFilesRecursive(srcDir, options);
+  const srcFileSet = new Set(files);
+  for (const rel of files) {
+    const [src, dst] = await Promise.all([
+      fs.readFile(path.join(srcDir, rel)),
+      fs.readFile(path.join(dstDir, rel)).catch(() => null),
+    ]);
+    if (!dst || !src.equals(dst)) return false;
+  }
+
+  const previousManifest = await readManagedFilesManifest(dstDir);
+  for (const [rel, previousHash] of Object.entries(previousManifest?.files ?? {})) {
+    if (srcFileSet.has(rel)) continue;
+    const currentHash = await hashFile(path.join(dstDir, rel)).catch(() => null);
+    if (currentHash === previousHash) return false;
+  }
+  return true;
+}
+
+export async function syncDirectoryFiles(
+  srcDir: string,
+  dstDir: string,
+  options?: DirectorySyncOptions,
+): Promise<number> {
+  const files = await listFilesRecursive(srcDir, options);
   const srcFileSet = new Set(files);
   const srcHashes: Record<string, string> = {};
   for (const rel of files) {
