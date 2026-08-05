@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { ArrowUpRight, Terminal, Blocks, Check, Settings2 } from "lucide-react-native";
+import { ArrowUpRight, Terminal, Blocks, Check, Settings2, Share2 } from "lucide-react-native";
 import { settingsStyles } from "@/styles/settings";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { Button } from "@/components/ui/button";
@@ -12,11 +12,16 @@ import { openExternalUrl } from "@/utils/open-external-url";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import {
   shouldUseDesktopDaemon,
+  type SharedContextStatus,
   type SkillOp,
   type SkillsSnapshot,
 } from "@/desktop/daemon/desktop-daemon";
 import { SkillSelectionSheet } from "@/desktop/components/skill-selection-sheet";
-import { useCliInstall, useSkillsStatus } from "@/desktop/hooks/use-install-status";
+import {
+  useCliInstall,
+  useSharedContextStatus,
+  useSkillsStatus,
+} from "@/desktop/hooks/use-install-status";
 
 const CLI_DOCS_URL = "https://paseo.sh/docs/cli";
 const SKILLS_DOCS_URL = "https://paseo.sh/docs/skills";
@@ -33,6 +38,20 @@ function formatUpdateMessage(ops: readonly SkillOp[], t: TFunction): string {
     return kindOrder !== 0 ? kindOrder : a.name.localeCompare(b.name);
   });
   return sorted.map((op) => `${t(OP_KIND_LABEL_KEY[op.kind])} ${op.name}`).join("\n");
+}
+
+function sharedContextDescription(status: SharedContextStatus | null, t: TFunction): string {
+  if (!status) return t("settings.integrations.sharedContext.description");
+  if (!status.mcpProxyReachable) return t("settings.integrations.sharedContext.proxyOffline");
+  const detected = status.providers.filter((provider) => provider.detected);
+  if (detected.length === 0) return t("settings.integrations.sharedContext.description");
+  const ready = detected.filter(
+    (provider) =>
+      provider.prompt !== "drift" && provider.skills !== "drift" && provider.mcp !== "drift",
+  ).length;
+  return status.state === "ready"
+    ? t("settings.integrations.sharedContext.ready", { count: detected.length })
+    : t("settings.integrations.sharedContext.drift", { ready, count: detected.length });
 }
 
 export function IntegrationsSection() {
@@ -59,14 +78,21 @@ export function IntegrationsSection() {
     () => skillsStatus?.ops.filter((op) => op.kind !== "delete") ?? [],
     [skillsStatus?.ops],
   );
+  const {
+    status: sharedContextStatus,
+    isWorking: isSharedContextWorking,
+    sync: syncSharedContext,
+    refresh: refreshSharedContextStatus,
+  } = useSharedContextStatus();
 
   useFocusEffect(
     useCallback(() => {
       if (!showSection) return undefined;
       refreshCliStatus();
       void refreshSkillsStatus();
+      void refreshSharedContextStatus();
       return undefined;
-    }, [refreshCliStatus, refreshSkillsStatus, showSection]),
+    }, [refreshCliStatus, refreshSharedContextStatus, refreshSkillsStatus, showSection]),
   );
 
   const handleInstallCli = useCallback(() => {
@@ -112,6 +138,17 @@ export function IntegrationsSection() {
   const handleCloseSkillSelection = useCallback(() => {
     setIsChoosingSkills(false);
   }, []);
+
+  const handleSyncSharedContext = useCallback(async () => {
+    if (isSharedContextWorking) return;
+    const confirmed = await confirmDialog({
+      title: t("settings.integrations.sharedContext.syncTitle"),
+      message: t("settings.integrations.sharedContext.syncMessage"),
+      confirmLabel: t("settings.integrations.actions.sync"),
+    });
+    if (!confirmed) return;
+    await syncSharedContext();
+  }, [isSharedContextWorking, syncSharedContext, t]);
 
   const handleOpenCliDocs = useCallback(() => {
     void openExternalUrl(CLI_DOCS_URL);
@@ -239,6 +276,24 @@ export function IntegrationsSection() {
             ) : null}
           </View>
         </View>
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <View style={settingsStyles.rowContent}>
+            <View style={styles.rowTitleRow}>
+              <Share2 size={theme.iconSize.md} color={theme.colors.foreground} />
+              <Text style={settingsStyles.rowTitle}>
+                {t("settings.integrations.sharedContext.title")}
+              </Text>
+            </View>
+            <Text style={settingsStyles.rowHint}>
+              {sharedContextDescription(sharedContextStatus, t)}
+            </Text>
+          </View>
+          <SharedContextAction
+            status={sharedContextStatus}
+            isWorking={isSharedContextWorking}
+            onSync={handleSyncSharedContext}
+          />
+        </View>
       </View>
       {skillsStatus ? (
         <SkillSelectionSheet
@@ -251,6 +306,34 @@ export function IntegrationsSection() {
         />
       ) : null}
     </SettingsSection>
+  );
+}
+
+function SharedContextAction({
+  status,
+  isWorking,
+  onSync,
+}: {
+  status: SharedContextStatus | null;
+  isWorking: boolean;
+  onSync: () => void;
+}) {
+  const { t } = useTranslation();
+  const { theme } = useUnistyles();
+  if (status?.state === "ready") {
+    return (
+      <View style={styles.installedLabel}>
+        <Check size={14} color={theme.colors.foregroundMuted} />
+        <Text style={styles.mutedText}>{t("settings.integrations.actions.synced")}</Text>
+      </View>
+    );
+  }
+  return (
+    <Button variant="outline" size="sm" onPress={onSync} disabled={isWorking}>
+      {isWorking
+        ? t("settings.integrations.actions.syncing")
+        : t("settings.integrations.actions.sync")}
+    </Button>
   );
 }
 

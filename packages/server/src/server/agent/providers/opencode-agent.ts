@@ -281,7 +281,44 @@ type OpenCodeMcpConfig =
       enabled?: boolean;
     };
 
-const MCP_ALREADY_PRESENT_ERROR_TOKENS = ["already", "exists", "connected"] as const;
+interface OpenCodeSessionConnection {
+  client: OpencodeClient;
+  release: () => Promise<void>;
+  serverUrl: string;
+}
+
+class OpenCodeServerRequestError extends Error {
+  readonly cause: unknown;
+
+  constructor(message: string, cause: unknown) {
+    super(message);
+    this.name = "OpenCodeServerRequestError";
+    this.cause = cause;
+  }
+}
+
+function isOpenCodeServerConnectionRefused(error: unknown): boolean {
+  return (
+    error instanceof OpenCodeServerRequestError &&
+    toDiagnosticErrorMessage(error).toLowerCase().includes("econnrefused")
+  );
+}
+
+// OpenCode re-registers an injected MCP server when the config already knows it.
+// Tolerate only unambiguous idempotent phrases in the operation's data payload;
+// broad tokens like "connected" would swallow real business errors such as
+// "not connected" or "already connected to another workspace".
+const MCP_ALREADY_PRESENT_PHRASES = [
+  "already exists",
+  "already present",
+  "already registered",
+] as const;
+
+function isAlreadyPresentMcpDataError(error: unknown): boolean {
+  const normalized = toDiagnosticErrorMessage(error).toLowerCase();
+  return MCP_ALREADY_PRESENT_PHRASES.some((phrase) => normalized.includes(phrase));
+}
+
 const OPENCODE_PROVIDER_LIST_TIMEOUT_MS = 30_000;
 const OPENCODE_METADATA_CONCURRENCY = 4;
 const openCodeMetadataLimit = pLimit(OPENCODE_METADATA_CONCURRENCY);
@@ -506,11 +543,6 @@ function isOpenCodeHeadersTimeoutFailure(error: unknown): boolean {
   return [...diagnostics].some((diagnostic) =>
     OPENCODE_HEADERS_TIMEOUT_TOKENS.some((token) => diagnostic.includes(token)),
   );
-}
-
-function isAlreadyPresentMcpError(error: unknown): boolean {
-  const normalized = toDiagnosticErrorMessage(error).toLowerCase();
-  return MCP_ALREADY_PRESENT_ERROR_TOKENS.some((token) => normalized.includes(token));
 }
 
 function readOpenCodeMcpOperationError(data: unknown, name: string): unknown {
@@ -1326,6 +1358,8 @@ export class OpenCodeAgentClient implements AgentClient {
         options?.persistSession,
         launchContext?.agentId,
         url,
+        false,
+        () => this.acquireSessionConnection(openCodeConfig, launchContext?.env),
       );
     } catch (error) {
       await acquisition.release();
@@ -1380,11 +1414,29 @@ export class OpenCodeAgentClient implements AgentClient {
         launchContext?.agentId,
         url,
         registeredAcquisition !== null,
+        registeredAcquisition === null
+          ? () => this.acquireSessionConnection(openCodeConfig, launchContext?.env)
+          : undefined,
       );
     } catch (error) {
       await acquisition.release();
       throw error;
     }
+  }
+
+  private async acquireSessionConnection(
+    config: OpenCodeAgentConfig,
+    launchEnv?: Record<string, string>,
+  ): Promise<OpenCodeSessionConnection> {
+    const acquisition = launchEnv
+      ? await this.serverManager.acquireDedicated(launchEnv)
+      : await this.serverManager.acquireCurrent();
+    const serverUrl = acquisition.server.url;
+    return {
+      client: this.createOpenCodeClient({ baseUrl: serverUrl, directory: config.cwd }),
+      release: acquisition.release,
+      serverUrl,
+    };
   }
 
   async fetchCatalog(options: FetchCatalogOptions): Promise<ProviderCatalog> {
@@ -2914,7 +2966,7 @@ class OpenCodeAgentSession implements AgentSession {
   readonly capabilities = OPENCODE_CAPABILITIES;
 
   private readonly config: OpenCodeAgentConfig;
-  private readonly client: OpencodeClient;
+  private client: OpencodeClient;
   private readonly sessionId: string;
   private readonly logger: Logger;
   private readonly modelContextWindowsByModelKey: ReadonlyMap<string, number>;
@@ -2979,8 +3031,9 @@ class OpenCodeAgentSession implements AgentSession {
     releaseServer?: () => Promise<void>,
     persistSession = true,
     private readonly agentId?: string,
-    private readonly serverUrl?: string,
+    private serverUrl?: string,
     private readonly externallyDriven = false,
+    private readonly reconnectServer?: () => Promise<OpenCodeSessionConnection>,
   ) {
     this.config = config;
     this.client = client;
@@ -3219,7 +3272,6 @@ class OpenCodeAgentSession implements AgentSession {
     this.subAgentCallIdByChildSessionId.clear();
     const turnAbortController = new AbortController();
     this.abortController = turnAbortController;
-    await this.ensureMcpServersConfigured();
     const contextWindowMaxTokens = this.resolveSelectedModelContextWindowMaxTokens();
     this.accumulatedUsage = contextWindowMaxTokens !== undefined ? { contextWindowMaxTokens } : {};
 
@@ -3233,6 +3285,7 @@ class OpenCodeAgentSession implements AgentSession {
     const effectiveMode = resolveOpenCodeRuntimeAgentId(this.currentMode);
 
     try {
+      await this.ensureMcpServersConfigured();
       await this.ensureEventStreamReady();
     } catch (error) {
       if (this.abortController === turnAbortController) {
@@ -4266,7 +4319,7 @@ class OpenCodeAgentSession implements AgentSession {
     }
 
     if (!this.mcpSetupPromise) {
-      this.mcpSetupPromise = this.configureMcpServers(mcpServers);
+      this.mcpSetupPromise = this.configureMcpServersWithRecovery(mcpServers);
     }
 
     try {
@@ -4276,6 +4329,72 @@ class OpenCodeAgentSession implements AgentSession {
       this.mcpSetupPromise = null;
       throw error;
     }
+  }
+
+  private async configureMcpServersWithRecovery(
+    mcpServers: Record<string, McpServerConfig>,
+  ): Promise<void> {
+    try {
+      await this.configureMcpServers(mcpServers);
+    } catch (error) {
+      if (!this.reconnectServer || !isOpenCodeServerConnectionRefused(error)) {
+        throw error;
+      }
+
+      await this.reconnectAfterServerFailure();
+      await this.configureMcpServers(mcpServers);
+    }
+  }
+
+  private async reconnectAfterServerFailure(): Promise<void> {
+    const reconnectServer = this.reconnectServer;
+    if (!reconnectServer) {
+      return;
+    }
+
+    const replacement = await reconnectServer();
+    if (this.closed) {
+      await replacement.release();
+      throw new Error("OpenCode session is closed");
+    }
+
+    const previousServerUrl = this.serverUrl;
+    const previousRelease = this.releaseServer;
+    const previousEventStreamTask = this.eventStreamTask;
+    this.eventStreamAbortController?.abort();
+    if (previousEventStreamTask) {
+      await previousEventStreamTask.catch(() => undefined);
+    }
+
+    this.eventStreamAbortController = null;
+    this.eventStreamReady = null;
+    this.eventStreamTask = null;
+    this.client = replacement.client;
+    this.releaseServer = replacement.release;
+    this.serverUrl = replacement.serverUrl;
+    this.mcpConfigured = false;
+    await previousRelease?.();
+
+    // Close can win at any await point above. The state swap is synchronous,
+    // so close either landed before the replacement was tracked (we must release
+    // it) or after it (close already released it through releaseServer and will
+    // abort the stream it finds in the fields — the replacement stream has not
+    // started yet at this point). Either way the replacement acquisition is
+    // released exactly once and no replacement event stream ever outlives the
+    // session.
+    if (this.closed) {
+      if (this.releaseServer === replacement.release) {
+        this.releaseServer = null;
+        await replacement.release();
+      }
+      throw new Error("OpenCode session is closed");
+    }
+
+    this.startEventStream();
+    this.logger.warn(
+      { previousServerUrl, serverUrl: replacement.serverUrl, sessionId: this.sessionId },
+      "Reconnected OpenCode session after helper server connection refusal",
+    );
   }
 
   private async configureMcpServers(mcpServers: Record<string, McpServerConfig>): Promise<void> {
@@ -4301,13 +4420,29 @@ class OpenCodeAgentSession implements AgentSession {
     name: string,
     run: () => Promise<{ data?: unknown; error?: unknown }>,
   ): Promise<void> {
-    const response = await run();
-    const error = response.error ?? readOpenCodeMcpOperationError(response.data, name);
+    let response: { data?: unknown; error?: unknown };
+    try {
+      response = await run();
+    } catch (error) {
+      throw new OpenCodeServerRequestError(
+        `Failed to ${operation} OpenCode MCP server '${name}': ${toDiagnosticErrorMessage(error)}`,
+        error,
+      );
+    }
+
+    if (response.error) {
+      throw new OpenCodeServerRequestError(
+        `Failed to ${operation} OpenCode MCP server '${name}': ${toDiagnosticErrorMessage(response.error)}`,
+        response.error,
+      );
+    }
+
+    const error = readOpenCodeMcpOperationError(response.data, name);
     if (!error) {
       return;
     }
 
-    if (isAlreadyPresentMcpError(error)) {
+    if (isAlreadyPresentMcpDataError(error)) {
       return;
     }
 

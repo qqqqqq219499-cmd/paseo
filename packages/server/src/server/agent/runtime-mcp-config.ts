@@ -2,6 +2,24 @@ import type { AgentSessionConfig, McpServerConfig } from "./agent-sdk-types.js";
 
 const PASEO_MCP_SERVER_NAME = "paseo";
 const PASEO_MCP_PATHNAME = "/mcp/agents";
+const MCPPROXY_SERVER_NAME = "mcpproxy";
+
+export function withRuntimeMcpProxyServer(params: {
+  config: AgentSessionConfig;
+  mcpProxyUrl: string | null;
+}): AgentSessionConfig {
+  if (!params.mcpProxyUrl || params.config.mcpServers?.[MCPPROXY_SERVER_NAME]) {
+    return params.config;
+  }
+
+  return {
+    ...params.config,
+    mcpServers: {
+      [MCPPROXY_SERVER_NAME]: { type: "http", url: params.mcpProxyUrl },
+      ...params.config.mcpServers,
+    },
+  };
+}
 
 export function stripInternalPaseoMcpServer(config: AgentSessionConfig): AgentSessionConfig {
   const mcpServers = config.mcpServers;

@@ -3,12 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   getCliInstallStatus,
+  getSharedContextStatus,
   getSkillsSnapshot,
   installCli,
   installSkills,
   saveSkillsSelection,
   shouldUseDesktopDaemon,
+  syncSharedContext,
   type InstallStatus,
+  type SharedContextStatus,
   type SkillSelection,
   type SkillsSaveResult,
   type SkillsSnapshot,
@@ -22,6 +25,11 @@ import {
 
 const CLI_INSTALL_STATUS_QUERY_KEY = ["desktop", "integrations", "cli-install-status"] as const;
 const SKILLS_STATUS_QUERY_KEY = ["desktop", "integrations", "skills-status"] as const;
+const SHARED_CONTEXT_STATUS_QUERY_KEY = [
+  "desktop",
+  "integrations",
+  "shared-context-status",
+] as const;
 
 interface DesktopInstallHookResult {
   status: InstallStatus | null;
@@ -219,5 +227,60 @@ export function useSkillsStatus(): SkillsStatusHookResult {
     update,
     uninstall,
     saveSelection,
+  };
+}
+
+export interface SharedContextStatusHookResult {
+  status: SharedContextStatus | null;
+  isLoading: boolean;
+  isWorking: boolean;
+  error: Error | null;
+  refresh: () => Promise<void>;
+  sync: () => Promise<void>;
+}
+
+export function useSharedContextStatus(): SharedContextStatusHookResult {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const reportError = useDesktopIpcErrorReporter();
+  const enabled = shouldUseDesktopDaemon();
+  const statusQuery = useQuery<SharedContextStatus, Error>({
+    queryKey: SHARED_CONTEXT_STATUS_QUERY_KEY,
+    queryFn: getSharedContextStatus,
+    enabled,
+    retry: false,
+  });
+  const { data: status, error: statusError, isLoading, refetch } = statusQuery;
+  useDesktopIpcQueryErrorToast({
+    error: statusQuery.error,
+    message: t("desktop.integrations.sharedContext.statusFailed"),
+    logLabel: "[Integrations] Failed to load shared context status",
+  });
+  const syncMutation = useMutation<SharedContextStatus, Error>({
+    mutationFn: syncSharedContext,
+    onError: (error) => {
+      reportError({
+        error,
+        message: t("desktop.integrations.sharedContext.syncFailed"),
+        logLabel: "[Integrations] Failed to sync shared context",
+      });
+    },
+    onSuccess: (nextStatus) => {
+      queryClient.setQueryData<SharedContextStatus>(SHARED_CONTEXT_STATUS_QUERY_KEY, nextStatus);
+    },
+  });
+  const refresh = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
+  const sync = useCallback(async () => {
+    await syncMutation.mutateAsync().catch(() => undefined);
+  }, [syncMutation]);
+  return {
+    status: status ?? null,
+    isLoading,
+    isWorking: syncMutation.isPending,
+    error: statusError ?? syncMutation.error ?? null,
+    refresh,
+    sync,
   };
 }

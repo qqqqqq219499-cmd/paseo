@@ -267,3 +267,72 @@ export async function saveSkillsSelection(
     }),
   );
 }
+
+export type SharedContextState = "not-configured" | "drift" | "ready";
+export type SharedContextCapabilityState = "synced" | "drift" | "unsupported";
+
+export interface SharedContextProviderStatus {
+  id: string;
+  label: string;
+  detected: boolean;
+  prompt: SharedContextCapabilityState;
+  skills: SharedContextCapabilityState;
+  mcp: SharedContextCapabilityState;
+}
+
+export interface SharedContextStatus {
+  state: SharedContextState;
+  canonical: {
+    promptExists: boolean;
+    skillsExist: boolean;
+  };
+  mcpProxyReachable: boolean;
+  providers: SharedContextProviderStatus[];
+}
+
+function parseSharedContextCapabilityState(raw: unknown): SharedContextCapabilityState {
+  if (raw === "synced" || raw === "drift" || raw === "unsupported") return raw;
+  throw new Error(`Unexpected shared context capability state: ${String(raw)}`);
+}
+
+function parseSharedContextProviderStatus(raw: unknown): SharedContextProviderStatus {
+  if (!isRecord(raw)) throw new Error("Unexpected shared context provider status.");
+  const id = toStringOrNull(raw.id);
+  const label = toStringOrNull(raw.label);
+  if (!id || !label) throw new Error("Shared context provider is missing its id or label.");
+  return {
+    id,
+    label,
+    detected: raw.detected === true,
+    prompt: parseSharedContextCapabilityState(raw.prompt),
+    skills: parseSharedContextCapabilityState(raw.skills),
+    mcp: parseSharedContextCapabilityState(raw.mcp),
+  };
+}
+
+function parseSharedContextStatus(raw: unknown): SharedContextStatus {
+  if (!isRecord(raw) || !isRecord(raw.canonical) || !Array.isArray(raw.providers)) {
+    throw new Error("Unexpected shared context status response.");
+  }
+  const state = raw.state;
+  if (state !== "not-configured" && state !== "drift" && state !== "ready") {
+    throw new Error(`Unexpected shared context state: ${String(state)}`);
+  }
+  return {
+    state,
+    canonical: {
+      promptExists: raw.canonical.promptExists === true,
+      skillsExist: raw.canonical.skillsExist === true,
+    },
+    mcpProxyReachable: raw.mcpProxyReachable === true,
+    providers: raw.providers.map(parseSharedContextProviderStatus),
+  };
+}
+
+export async function getSharedContextStatus(): Promise<SharedContextStatus> {
+  return parseSharedContextStatus(await invokeDesktopCommand("get_shared_context_status"));
+}
+
+export async function syncSharedContext(): Promise<SharedContextStatus> {
+  return parseSharedContextStatus(await invokeDesktopCommand("sync_shared_context"));
+}

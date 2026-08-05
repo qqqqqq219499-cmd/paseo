@@ -244,7 +244,7 @@ export const zhCN: TranslationResources = {
       title: "集群",
       on: "开启",
       off: "关闭",
-      hint: "消息走集群编排执行",
+      hint: "开启后:主 agent 当带队主脑,在对话里可见地规划、把活拆给并行工人(可在侧边栏看到工人在跑),干完再汇总。小问题直接回答,你随时能继续对话,不用关掉。",
       unsupported: "升级 Host 以启用集群模式",
     },
   },
@@ -572,7 +572,8 @@ export const zhCN: TranslationResources = {
       menu: {
         openFor: "打开 {{label}} 的菜单",
         copyResumeCommand: "复制恢复命令",
-        copyAgentId: "复制 Agent ID",
+        copyAgentId: "复制召回提示",
+        agentRecallPrompt: "接着这个会话的上下文：{{id}}\n先召回再继续。",
         copyTerminalId: "复制 Terminal ID",
         copyFilePath: "Copy file path",
         rename: "重命名",
@@ -610,7 +611,7 @@ export const zhCN: TranslationResources = {
       },
       toasts: {
         copyFailed: "复制失败",
-        agentIdCopiedLabel: "Agent ID",
+        agentIdCopiedLabel: "召回提示",
         terminalIdCopiedLabel: "Terminal ID",
         resumeCommandCopiedLabel: "恢复命令",
         filePathCopiedLabel: "File path",
@@ -1269,6 +1270,10 @@ export const zhCN: TranslationResources = {
         updateFailed: "无法更新编排 skills。",
         uninstallFailed: "无法卸载编排 skills。",
         saveSelectionFailed: "无法保存编排 skills 的选择。",
+      },
+      sharedContext: {
+        statusFailed: "无法检查共享 AI 上下文。",
+        syncFailed: "无法同步共享 AI 上下文。",
       },
     },
   },
@@ -2138,6 +2143,16 @@ export const zhCN: TranslationResources = {
           "将从 ~/.agents、~/.claude、~/.codex 中删除 {{skills}}。你在这些 skill 文件夹里添加的内容也会一并删除。",
         saveFailed: "无法保存你的 skills 选择。",
       },
+      sharedContext: {
+        title: "共享 AI 上下文",
+        description: "让检测到的 AI 客户端共用一份提示词、skills 与 MCPProxy",
+        ready: "检测到的 {{count}} 个 AI 客户端已使用共享上下文",
+        drift: "检测到 {{count}} 个 AI 客户端，已同步 {{ready}} 个",
+        proxyOffline: "MCPProxy 未运行，请先启动再同步",
+        syncTitle: "同步共享 AI 上下文？",
+        syncMessage:
+          "会先备份发生变化的客户端文件，再链接到 ~/.ai-shared；客户端私有 skills 和现有 MCP 项会保留。",
+      },
       actions: {
         install: "安装",
         installing: "正在安装...",
@@ -2148,6 +2163,9 @@ export const zhCN: TranslationResources = {
         uninstall: "卸载",
         save: "保存",
         saving: "正在保存...",
+        sync: "同步",
+        syncing: "正在同步...",
+        synced: "已同步",
       },
       operations: {
         add: "添加 skill",

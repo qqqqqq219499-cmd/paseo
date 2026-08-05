@@ -16,6 +16,7 @@ import {
   TestOpenCodeClient,
   TestOpenCodeHarness,
 } from "./opencode/test-utils/test-opencode-harness.js";
+import type { OpenCodeServerAcquisition } from "./opencode/server-manager.js";
 import type {
   AgentSessionConfig,
   AgentStreamEvent,
@@ -1133,6 +1134,64 @@ describe("OpenCode adapter startTurn error handling", () => {
     }
   });
 
+  test("reconnects when a stale OpenCode server refuses injected MCP setup", async () => {
+    const runtime = new TestOpenCodeHarness();
+    const staleClient = new TestOpenCodeClient();
+    staleClient.mcpAddResponse = {
+      error: new Error(
+        "fetch failed\ncaused by: connect ECONNREFUSED 127.0.0.1:44271\nexit code: ECONNREFUSED",
+      ),
+    };
+    const replacementClient = new TestOpenCodeClient();
+    runtime.enqueueClient(staleClient);
+    runtime.enqueueClient(replacementClient);
+    const cwd = tmpCwd();
+    const client = new OpenCodeAgentClient(createTestLogger(), undefined, {
+      serverManager: runtime,
+      createClient: runtime.createClient,
+    });
+
+    try {
+      const session = await client.createSession({
+        provider: "opencode",
+        cwd,
+        mcpServers: {
+          mcpproxy: {
+            type: "http",
+            url: "http://127.0.0.1:8933/mcp/",
+          },
+        },
+      });
+      runtime.server = { port: 5678, url: "http://127.0.0.1:5678" };
+      const originalSessionId = session.id;
+
+      try {
+        const turn = await collectTurnEvents(streamSession(session, "hello"));
+
+        expect(turn.turnCompleted).toBe(true);
+        expect(session.id).toBe(originalSessionId);
+        expect(replacementClient.calls.sessionPromptAsync[0]).toEqual(
+          expect.objectContaining({ sessionID: originalSessionId }),
+        );
+        expect(staleClient.calls.mcpAdd).toHaveLength(1);
+        expect(replacementClient.calls.mcpAdd).toHaveLength(1);
+        expect(replacementClient.calls.sessionPromptAsync).toHaveLength(1);
+        expect(runtime.clientCreations.map((entry) => entry.baseUrl)).toEqual([
+          "http://127.0.0.1:1234",
+          "http://127.0.0.1:5678",
+        ]);
+        expect(runtime.acquisitions.map((entry) => entry.kind)).toEqual(["current", "current"]);
+        expect(runtime.acquisitions[0]?.releaseCount).toBe(1);
+      } finally {
+        await session.close();
+      }
+
+      expect(runtime.acquisitions[1]?.releaseCount).toBe(1);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   test("fails the turn when OpenCode reports MCP add failure in data payload", async () => {
     const runtime = new TestOpenCodeHarness();
     const openCodeClient = new TestOpenCodeClient();
@@ -1168,6 +1227,278 @@ describe("OpenCode adapter startTurn error handling", () => {
       );
 
       await session.close();
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("fails the turn when MCP add data-payload error says already connected to another workspace", async () => {
+    const runtime = new TestOpenCodeHarness();
+    const openCodeClient = new TestOpenCodeClient();
+    openCodeClient.mcpAddResponse = {
+      data: {
+        paseo: {
+          status: "failed",
+          error: "MCP server 'paseo' is already connected to another workspace",
+        },
+      },
+    };
+    runtime.enqueueClient(openCodeClient);
+    const cwd = tmpCwd();
+    const client = new OpenCodeAgentClient(createTestLogger(), undefined, {
+      serverManager: runtime,
+      createClient: runtime.createClient,
+    });
+
+    try {
+      const session = await client.createSession({
+        provider: "opencode",
+        cwd,
+        mcpServers: {
+          paseo: {
+            type: "http",
+            url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=test-agent",
+          },
+        },
+      });
+
+      await expect(collectTurnEvents(streamSession(session, "hello"))).rejects.toThrow(
+        /Failed to add OpenCode MCP server 'paseo': MCP server 'paseo' is already connected/,
+      );
+
+      await session.close();
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("tolerates an already-present MCP add data-payload error", async () => {
+    const runtime = new TestOpenCodeHarness();
+    const openCodeClient = new TestOpenCodeClient();
+    openCodeClient.mcpAddResponse = {
+      data: {
+        paseo: {
+          status: "failed",
+          error: "MCP server 'paseo' already exists in this workspace",
+        },
+      },
+    };
+    runtime.enqueueClient(openCodeClient);
+    const cwd = tmpCwd();
+    const client = new OpenCodeAgentClient(createTestLogger(), undefined, {
+      serverManager: runtime,
+      createClient: runtime.createClient,
+    });
+
+    try {
+      const session = await client.createSession({
+        provider: "opencode",
+        cwd,
+        mcpServers: {
+          paseo: {
+            type: "http",
+            url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=test-agent",
+          },
+        },
+      });
+
+      const turn = await collectTurnEvents(streamSession(session, "hello"));
+      expect(turn.turnCompleted).toBe(true);
+      expect(openCodeClient.calls.sessionPromptAsync).toHaveLength(1);
+      expect(runtime.acquisitions).toHaveLength(1);
+
+      await session.close();
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("fails the turn when the replacement OpenCode server also refuses MCP setup", async () => {
+    const runtime = new TestOpenCodeHarness();
+    const staleClient = new TestOpenCodeClient();
+    staleClient.mcpAddResponse = {
+      error: new Error(
+        "fetch failed\ncaused by: connect ECONNREFUSED 127.0.0.1:44271\nexit code: ECONNREFUSED",
+      ),
+    };
+    const replacementClient = new TestOpenCodeClient();
+    replacementClient.mcpAddResponse = {
+      error: new Error(
+        "fetch failed\ncaused by: connect ECONNREFUSED 127.0.0.1:5678\nexit code: ECONNREFUSED",
+      ),
+    };
+    runtime.enqueueClient(staleClient);
+    runtime.enqueueClient(replacementClient);
+    const cwd = tmpCwd();
+    const client = new OpenCodeAgentClient(createTestLogger(), undefined, {
+      serverManager: runtime,
+      createClient: runtime.createClient,
+    });
+
+    try {
+      const session = await client.createSession({
+        provider: "opencode",
+        cwd,
+        mcpServers: {
+          mcpproxy: {
+            type: "http",
+            url: "http://127.0.0.1:8933/mcp/",
+          },
+        },
+      });
+      runtime.server = { port: 5678, url: "http://127.0.0.1:5678" };
+
+      await expect(collectTurnEvents(streamSession(session, "hello"))).rejects.toThrow(
+        /Failed to add OpenCode MCP server 'mcpproxy':[\s\S]*ECONNREFUSED/,
+      );
+
+      await session.close();
+
+      expect(runtime.acquisitions.map((entry) => entry.kind)).toEqual(["current", "current"]);
+      expect(runtime.acquisitions.every((entry) => entry.releaseCount === 1)).toBe(true);
+      expect(runtime.clientCreations).toHaveLength(2);
+      expect(replacementClient.calls.mcpAdd).toHaveLength(1);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("uses dedicated acquisitions with the same env for initial and replacement servers", async () => {
+    const runtime = new TestOpenCodeHarness();
+    const staleClient = new TestOpenCodeClient();
+    staleClient.mcpAddResponse = {
+      error: new Error(
+        "fetch failed\ncaused by: connect ECONNREFUSED 127.0.0.1:44271\nexit code: ECONNREFUSED",
+      ),
+    };
+    const replacementClient = new TestOpenCodeClient();
+    runtime.enqueueClient(staleClient);
+    runtime.enqueueClient(replacementClient);
+    const cwd = tmpCwd();
+    const client = new OpenCodeAgentClient(createTestLogger(), undefined, {
+      serverManager: runtime,
+      createClient: runtime.createClient,
+    });
+
+    try {
+      const env = { PASEO_TEST_LAUNCH_ENV: "dedicated-value" };
+      const session = await client.createSession(
+        {
+          provider: "opencode",
+          cwd,
+          mcpServers: {
+            mcpproxy: {
+              type: "http",
+              url: "http://127.0.0.1:8933/mcp/",
+            },
+          },
+        },
+        { env },
+      );
+      runtime.server = { port: 5678, url: "http://127.0.0.1:5678" };
+
+      const turn = await collectTurnEvents(streamSession(session, "hello"));
+      expect(turn.turnCompleted).toBe(true);
+
+      await session.close();
+
+      expect(runtime.acquisitions).toEqual([
+        { kind: "dedicated", env, releaseCount: 1 },
+        { kind: "dedicated", env, releaseCount: 1 },
+      ]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("releases the replacement acquisition when close wins during reconnect", async () => {
+    const runtime = new GatedOpenCodeHarness();
+    const staleClient = new TestOpenCodeClient();
+    staleClient.mcpAddResponse = {
+      error: new Error(
+        "fetch failed\ncaused by: connect ECONNREFUSED 127.0.0.1:44271\nexit code: ECONNREFUSED",
+      ),
+    };
+    const replacementClient = new TestOpenCodeClient();
+    runtime.enqueueClient(staleClient);
+    runtime.enqueueClient(replacementClient);
+    const cwd = tmpCwd();
+    const client = new OpenCodeAgentClient(createTestLogger(), undefined, {
+      serverManager: runtime,
+      createClient: runtime.createClient,
+    });
+
+    try {
+      const session = await client.createSession({
+        provider: "opencode",
+        cwd,
+        mcpServers: {
+          mcpproxy: {
+            type: "http",
+            url: "http://127.0.0.1:8933/mcp/",
+          },
+        },
+      });
+      runtime.server = { port: 5678, url: "http://127.0.0.1:5678" };
+
+      const turnPromise = collectTurnEvents(streamSession(session, "hello"));
+      await runtime.secondAcquireStarted.promise;
+      await session.close();
+      runtime.releaseSecondAcquire.resolve();
+
+      await expect(turnPromise).rejects.toThrow("OpenCode session is closed");
+
+      expect(runtime.acquisitions.map((entry) => entry.kind)).toEqual(["current", "current"]);
+      expect(runtime.acquisitions.every((entry) => entry.releaseCount === 1)).toBe(true);
+      expect(replacementClient.calls.globalEvent).toHaveLength(0);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("releases the replacement acquisition when close wins after the reconnect swap", async () => {
+    const runtime = new OldReleaseGatedOpenCodeHarness();
+    const staleClient = new TestOpenCodeClient();
+    staleClient.mcpAddResponse = {
+      error: new Error(
+        "fetch failed\ncaused by: connect ECONNREFUSED 127.0.0.1:44271\nexit code: ECONNREFUSED",
+      ),
+    };
+    const replacementClient = new TestOpenCodeClient();
+    runtime.enqueueClient(staleClient);
+    runtime.enqueueClient(replacementClient);
+    const cwd = tmpCwd();
+    const client = new OpenCodeAgentClient(createTestLogger(), undefined, {
+      serverManager: runtime,
+      createClient: runtime.createClient,
+    });
+
+    try {
+      const session = await client.createSession({
+        provider: "opencode",
+        cwd,
+        mcpServers: {
+          mcpproxy: {
+            type: "http",
+            url: "http://127.0.0.1:8933/mcp/",
+          },
+        },
+      });
+      runtime.server = { port: 5678, url: "http://127.0.0.1:5678" };
+
+      // Reconnect returns the replacement acquisition, swaps client/releaseServer,
+      // then parks on the old acquisition's release — replacement tracked, new
+      // event stream not started yet. Close lands exactly there.
+      const turnPromise = collectTurnEvents(streamSession(session, "hello"));
+      await runtime.oldReleaseStarted.promise;
+      await session.close();
+      runtime.releaseOldRelease.resolve();
+
+      await expect(turnPromise).rejects.toThrow("OpenCode session is closed");
+
+      expect(runtime.acquisitions.map((entry) => entry.kind)).toEqual(["current", "current"]);
+      expect(runtime.acquisitions.every((entry) => entry.releaseCount === 1)).toBe(true);
+      expect(replacementClient.calls.globalEvent).toHaveLength(0);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -4639,6 +4970,52 @@ function createTestDeferred<T>(): {
     reject = rej;
   });
   return { promise, resolve, reject };
+}
+
+/**
+ * Holds the second `acquireCurrent` (the reconnect replacement acquisition)
+ * until the test releases it, so the test can deterministically close the
+ * session while reconnect is parked mid-flight.
+ */
+class GatedOpenCodeHarness extends TestOpenCodeHarness {
+  readonly secondAcquireStarted = createTestDeferred<void>();
+  readonly releaseSecondAcquire = createTestDeferred<void>();
+  private acquireCount = 0;
+
+  override async acquireCurrent(): Promise<OpenCodeServerAcquisition> {
+    this.acquireCount += 1;
+    if (this.acquireCount === 2) {
+      this.secondAcquireStarted.resolve();
+      await this.releaseSecondAcquire.promise;
+    }
+    return super.acquireCurrent();
+  }
+}
+
+/**
+ * Lets the replacement acquisition return, then parks reconnect on the OLD
+ * acquisition's release — i.e. after client/releaseServer were swapped but
+ * before the second closed gate and `startEventStream`. The test closes the
+ * session while reconnect is parked exactly there.
+ */
+class OldReleaseGatedOpenCodeHarness extends TestOpenCodeHarness {
+  readonly oldReleaseStarted = createTestDeferred<void>();
+  readonly releaseOldRelease = createTestDeferred<void>();
+  private acquireCount = 0;
+
+  override async acquireCurrent(): Promise<OpenCodeServerAcquisition> {
+    this.acquireCount += 1;
+    const acquisition = await super.acquireCurrent();
+    if (this.acquireCount === 1) {
+      const originalRelease = acquisition.release;
+      acquisition.release = async () => {
+        this.oldReleaseStarted.resolve();
+        await this.releaseOldRelease.promise;
+        await originalRelease();
+      };
+    }
+    return acquisition;
+  }
 }
 
 function waitForAbort(signal: AbortSignal): Promise<void> {

@@ -1,17 +1,19 @@
 import { expect, test } from "vitest";
 
-import { tryAcquireClusterRun } from "./run-registry.js";
+import { isClusterRunActive, tryAcquireClusterRun } from "./run-registry.js";
 
 test("first acquire returns a release function", () => {
   const owner = {};
   const release = tryAcquireClusterRun(owner, "agent-1");
   expect(release).toBeTypeOf("function");
+  expect(isClusterRunActive(owner, "agent-1")).toBe(true);
 });
 
 test("same owner + same agent acquires only once", () => {
   const owner = {};
   expect(tryAcquireClusterRun(owner, "agent-1")).not.toBeNull();
   expect(tryAcquireClusterRun(owner, "agent-1")).toBeNull();
+  expect(isClusterRunActive(owner, "agent-1")).toBe(true);
 });
 
 test("release allows re-acquire", () => {
@@ -19,6 +21,7 @@ test("release allows re-acquire", () => {
   const release = tryAcquireClusterRun(owner, "agent-1");
   expect(release).not.toBeNull();
   release?.();
+  expect(isClusterRunActive(owner, "agent-1")).toBe(false);
   expect(tryAcquireClusterRun(owner, "agent-1")).not.toBeNull();
 });
 

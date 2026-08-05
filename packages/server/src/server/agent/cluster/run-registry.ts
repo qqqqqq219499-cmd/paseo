@@ -13,7 +13,18 @@
 export const CLUSTER_RUN_ALREADY_ACTIVE_ERROR =
   "A cluster run is already in progress for this agent. Wait for it to finish before sending another task.";
 
+/** Notice when a follow-up is accepted into the queue while a run is active. */
+export const CLUSTER_RUN_QUEUED_NOTICE =
+  "Cluster run still in progress — your message was queued and will run after the current workers finish. You can keep the Cluster toggle on.";
+
 const activeRunsByOwner = new WeakMap<object, Set<string>>();
+
+/**
+ * Whether `agentId` currently holds the cluster-start slot under `owner`.
+ */
+export function isClusterRunActive(owner: object, agentId: string): boolean {
+  return activeRunsByOwner.get(owner)?.has(agentId) === true;
+}
 
 /**
  * Try to claim the single cluster-start slot for `agentId` under `owner`.

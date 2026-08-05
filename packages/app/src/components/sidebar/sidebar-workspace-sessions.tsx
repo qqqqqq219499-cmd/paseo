@@ -91,7 +91,8 @@ export const SidebarSessionRow = memo(function SidebarSessionRow({
     if (!session.id) {
       return;
     }
-    void Clipboard.setStringAsync(session.id)
+    const text = t("workspace.tabs.menu.agentRecallPrompt", { id: session.id });
+    void Clipboard.setStringAsync(text)
       .then(() => {
         toast.copied(t("workspace.tabs.toasts.agentIdCopiedLabel"));
         return undefined;

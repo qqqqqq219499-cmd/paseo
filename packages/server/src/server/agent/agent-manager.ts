@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import {
   AGENT_LIFECYCLE_STATUSES,
   type AgentLifecycleStatus,
@@ -65,7 +65,13 @@ import { AgentRunState, type ForegroundTurnWaiter } from "./agent-run-state.js";
 import { getAgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
-import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
+import {
+  stripInternalPaseoMcpServer,
+  withRuntimeMcpProxyServer,
+  withRuntimePaseoMcpServer,
+} from "./runtime-mcp-config.js";
+import type { RuntimeSharedContext } from "./runtime-shared-context.js";
+import { composeSystemPromptParts } from "./system-prompt.js";
 import { resolveCreateAgentTitles } from "./create-agent-title.js";
 import type { PaseoToolCatalogFactory } from "./tools/types.js";
 import {
@@ -275,6 +281,7 @@ export interface AgentManagerOptions {
   paseoToolsEnabled?: boolean;
   paseoToolCatalogFactory?: PaseoToolCatalogFactory;
   appendSystemPrompt?: string;
+  sharedContext?: RuntimeSharedContext;
   agentStreamCoalesceWindowMs?: number;
   rescueTimeouts?: AgentManagerRescueTimeouts;
   logger: Logger;
@@ -621,6 +628,7 @@ function getFirstUserMessageTextFromRows(rows: readonly AgentTimelineRow[]): str
 export class AgentManager {
   private readonly clients = new Map<AgentProvider, AgentClient>();
   private readonly providerEnabled = new Map<AgentProvider, boolean>();
+  private readonly providerBases = new Map<AgentProvider, AgentProvider>();
   private readonly agents = new Map<string, LiveManagedAgent>();
   private readonly timelineStore = new InMemoryAgentTimelineStore();
   private readonly providerSubagents = new ProviderSubagentStore();
@@ -641,6 +649,7 @@ export class AgentManager {
   private paseoToolsEnabled = true;
   private paseoToolCatalogFactory: PaseoToolCatalogFactory | null = null;
   private appendSystemPrompt: string;
+  private readonly sharedContext: RuntimeSharedContext | null;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
   private onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
@@ -658,6 +667,7 @@ export class AgentManager {
     this.mcpAuthToken = options?.mcpAuthToken ?? null;
     this.configurePaseoTools(options);
     this.appendSystemPrompt = options.appendSystemPrompt ?? "";
+    this.sharedContext = options.sharedContext ?? null;
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
     this.rescueTimeouts = {
       reloadSessionCloseMs:
@@ -693,9 +703,13 @@ export class AgentManager {
     clients: ProviderClientMap;
   }): void {
     this.providerEnabled.clear();
+    this.providerBases.clear();
     for (const [provider, definition] of Object.entries(input.providerDefinitions)) {
       if (definition) {
         this.providerEnabled.set(provider, definition.enabled);
+        if (definition.derivedFromProviderId) {
+          this.providerBases.set(provider, definition.derivedFromProviderId);
+        }
       }
     }
 
@@ -4523,19 +4537,38 @@ export class AgentManager {
     env?: Record<string, string>,
   ): Promise<PreparedSessionConfig> {
     const storedConfig = await this.normalizeConfig(stripInternalPaseoMcpServer(config), { env });
-    const launchConfig = this.applyDaemonAppendSystemPrompt(
-      withRuntimePaseoMcpServer({
-        config: storedConfig,
-        agentId,
-        mcpBaseUrl: this.mcpBaseUrl,
-        mcpAuthToken: this.mcpAuthToken,
+    const launchConfig = await this.applyRuntimeSharedContext(
+      withRuntimeMcpProxyServer({
+        config: withRuntimePaseoMcpServer({
+          config: storedConfig,
+          agentId,
+          mcpBaseUrl: this.mcpBaseUrl,
+          mcpAuthToken: this.mcpAuthToken,
+        }),
+        mcpProxyUrl: this.sharedContext?.mcpProxyUrl ?? null,
       }),
     );
     return { storedConfig, launchConfig };
   }
 
-  private applyDaemonAppendSystemPrompt(config: AgentSessionConfig): AgentSessionConfig {
-    const daemonAppendSystemPrompt = this.appendSystemPrompt.trim();
+  private async applyRuntimeSharedContext(config: AgentSessionConfig): Promise<AgentSessionConfig> {
+    const nativePromptPath = this.resolveNativePromptPath(config.provider);
+    const nativePromptIsCanonical =
+      this.sharedContext && nativePromptPath
+        ? await this.pathsPointToSameFile(this.sharedContext.promptPath, nativePromptPath)
+        : false;
+    const sharedPrompt =
+      this.sharedContext && !nativePromptIsCanonical
+        ? await readFile(this.sharedContext.promptPath, "utf8").catch(() => "")
+        : "";
+    const skillsInstruction = this.sharedContext
+      ? `Canonical skills directory: ${this.sharedContext.skillsDir}`
+      : "";
+    const daemonAppendSystemPrompt = composeSystemPromptParts(
+      sharedPrompt,
+      skillsInstruction,
+      this.appendSystemPrompt,
+    );
     const next = { ...config };
     delete next.daemonAppendSystemPrompt;
 
@@ -4545,6 +4578,28 @@ export class AgentManager {
           daemonAppendSystemPrompt,
         }
       : next;
+  }
+
+  private resolveNativePromptPath(provider: AgentProvider): string | null {
+    const promptPaths = this.sharedContext?.nativePromptPaths;
+    if (!promptPaths) return null;
+    const seen = new Set<AgentProvider>();
+    let current: AgentProvider | undefined = provider;
+    while (current && !seen.has(current)) {
+      seen.add(current);
+      const promptPath = promptPaths[current];
+      if (promptPath) return promptPath;
+      current = this.providerBases.get(current);
+    }
+    return null;
+  }
+
+  private async pathsPointToSameFile(leftPath: string, rightPath: string): Promise<boolean> {
+    const [left, right] = await Promise.all([
+      stat(leftPath).catch(() => null),
+      stat(rightPath).catch(() => null),
+    ]);
+    return left !== null && right !== null && left.dev === right.dev && left.ino === right.ino;
   }
 
   private async buildLaunchContext(
@@ -4559,6 +4614,7 @@ export class AgentManager {
         ...env,
         PASEO_AGENT_ID: agentId,
         PASEO_AGENT_CWD: cwd,
+        ...(this.sharedContext ? { PASEO_SHARED_SKILLS_DIR: this.sharedContext.skillsDir } : {}),
       },
     };
     if (

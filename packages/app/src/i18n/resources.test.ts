@@ -236,6 +236,7 @@ describe("translation resources", () => {
     expect(en.settings.shortcuts.actions.rebind).toBe("Rebind");
     expect(en.settings.integrations.commandLine.title).toBe("Command line");
     expect(en.settings.integrations.skills.updateAvailable).toBe("Update available");
+    expect(en.settings.integrations.sharedContext.title).toBe("Shared AI context");
     expect(en.settings.permissions.notifications).toBe("Notifications");
     expect(en.settings.permissions.actions.request).toBe("Request");
   });
@@ -382,7 +383,9 @@ describe("translation resources", () => {
   it("includes workspace tab toast keys for the Batch 4J migration", () => {
     expect(en.workspace.tabs.emptyPane).toBe("No tabs in this pane.");
     expect(en.workspace.tabs.toasts.copyFailed).toBe("Copy failed");
-    expect(en.workspace.tabs.toasts.agentIdCopiedLabel).toBe("Agent ID");
+    expect(en.workspace.tabs.toasts.agentIdCopiedLabel).toBe("Recall prompt");
+    expect(en.workspace.tabs.menu.copyAgentId).toBe("Copy recall prompt");
+    expect(en.workspace.tabs.menu.agentRecallPrompt).toContain("{{id}}");
     expect(en.workspace.tabs.toasts.resumeCommandCopiedLabel).toBe("resume command");
     expect(en.workspace.tabs.toasts.resumeIdUnavailable).toBe("Resume ID not available");
     expect(en.workspace.tabs.toasts.resumeCommandUnavailable).toBe("Resume command not available");

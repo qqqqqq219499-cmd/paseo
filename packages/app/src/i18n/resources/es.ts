@@ -244,7 +244,7 @@ export const es: TranslationResources = {
       title: "Cluster",
       on: "On",
       off: "Off",
-      hint: "Run messages through cluster orchestration",
+      hint: "Activado: el agente principal lidera: planifica en el chat, delega en trabajadores paralelos que puedes ver en la barra lateral y resume los resultados. Las preguntas sencillas se responden directamente y puedes seguir conversando en cualquier momento.",
       unsupported: "Upgrade your host to enable cluster mode",
     },
   },
@@ -576,7 +576,9 @@ export const es: TranslationResources = {
       menu: {
         openFor: "Menú abierto para{{label}}",
         copyResumeCommand: "Copiar comando de reanudación",
-        copyAgentId: "Copiar ID del agente",
+        copyAgentId: "Copiar prompt de reanudación",
+        agentRecallPrompt:
+          "Continue this session context: {{id}}\nRecall first with ccswitch-resume, then continue.",
         copyTerminalId: "Copiar ID del terminal",
         copyFilePath: "Copy file path",
         rename: "Rebautizar",
@@ -615,7 +617,7 @@ export const es: TranslationResources = {
       },
       toasts: {
         copyFailed: "Copia fallida",
-        agentIdCopiedLabel: "AgentID",
+        agentIdCopiedLabel: "Recall prompt",
         terminalIdCopiedLabel: "ID del terminal",
         resumeCommandCopiedLabel: "reanudar el comando",
         filePathCopiedLabel: "File path",
@@ -1325,6 +1327,10 @@ export const es: TranslationResources = {
         updateFailed: "No se pueden actualizar las habilidades de orquestación.",
         uninstallFailed: "No se pueden desinstalar las habilidades de orquestación.",
         saveSelectionFailed: "No se puede guardar la selección de habilidades de orquestación.",
+      },
+      sharedContext: {
+        statusFailed: "Unable to check shared AI context.",
+        syncFailed: "Unable to sync shared AI context.",
       },
     },
   },
@@ -2217,6 +2223,16 @@ export const es: TranslationResources = {
           "{{skills}} se eliminarán de ~/.agents, ~/.claude y ~/.codex. También se elimina todo lo que hayas añadido dentro de esas carpetas de habilidades.",
         saveFailed: "No se pudo guardar tu selección de habilidades.",
       },
+      sharedContext: {
+        title: "Shared AI context",
+        description: "Link detected AI clients to one prompt, skill library, and MCPProxy",
+        ready: "{{count}} detected AI clients use the shared context",
+        drift: "{{ready}} of {{count}} detected AI clients are synced",
+        proxyOffline: "MCPProxy is offline; start it before syncing",
+        syncTitle: "Sync shared AI context?",
+        syncMessage:
+          "Backs up changed provider files, links them to ~/.ai-shared, and preserves provider-only skills and MCP entries.",
+      },
       actions: {
         install: "Instalar",
         installing: "Instalando...",
@@ -2227,6 +2243,9 @@ export const es: TranslationResources = {
         uninstall: "Desinstalar",
         save: "Guardar",
         saving: "Guardando...",
+        sync: "Sync",
+        syncing: "Syncing...",
+        synced: "Synced",
       },
       operations: {
         add: "Agregar habilidad",

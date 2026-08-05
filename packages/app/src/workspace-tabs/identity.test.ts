@@ -44,6 +44,26 @@ describe("provider subagent tab identity", () => {
   });
 });
 
+describe("swarm_board tab identity", () => {
+  test("keeps swarm_board as its own tab kind (collaboration graph panel)", () => {
+    expect(
+      normalizeWorkspaceTabTarget({
+        kind: "swarm_board",
+        parentAgentId: " parent-1 ",
+      }),
+    ).toEqual({ kind: "swarm_board", parentAgentId: "parent-1" });
+  });
+
+  test("rejects a swarm_board target with a blank parent", () => {
+    expect(
+      normalizeWorkspaceTabTarget({
+        kind: "swarm_board",
+        parentAgentId: "   ",
+      }),
+    ).toBeNull();
+  });
+});
+
 describe("working diff tab identity", () => {
   const target = {
     kind: "working_diff" as const,

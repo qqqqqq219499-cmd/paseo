@@ -244,7 +244,7 @@ export const ar: TranslationResources = {
       title: "Cluster",
       on: "On",
       off: "Off",
-      hint: "Run messages through cluster orchestration",
+      hint: "عند التفعيل: يقود الوكيل الرئيسي العمل — يخطط داخل المحادثة، ويفوّض المهام إلى عمال متوازين يمكنك متابعتهم في الشريط الجانبي، ثم يلخّص النتائج. تتم الإجابة على الأسئلة البسيطة مباشرةً، ويمكنك متابعة المحادثة في أي وقت.",
       unsupported: "Upgrade your host to enable cluster mode",
     },
   },
@@ -572,7 +572,9 @@ export const ar: TranslationResources = {
       menu: {
         openFor: "فتح القائمة لـ{{label}}",
         copyResumeCommand: "نسخ أمر السيرة الذاتية",
-        copyAgentId: "نسخ معرف الوكيل",
+        copyAgentId: "نسخ موجه الاسترجاع",
+        agentRecallPrompt:
+          "Continue this session context: {{id}}\nRecall first with ccswitch-resume, then continue.",
         copyTerminalId: "نسخ معرف المحطة",
         copyFilePath: "Copy file path",
         rename: "إعادة تسمية",
@@ -610,7 +612,7 @@ export const ar: TranslationResources = {
       },
       toasts: {
         copyFailed: "فشل النسخ",
-        agentIdCopiedLabel: "AgentID",
+        agentIdCopiedLabel: "Recall prompt",
         terminalIdCopiedLabel: "معرف المحطة",
         resumeCommandCopiedLabel: "أمر الاستئناف",
         filePathCopiedLabel: "File path",
@@ -1285,6 +1287,10 @@ export const ar: TranslationResources = {
         updateFailed: "غير قادر على تحديث مهارات التنسيق.",
         uninstallFailed: "غير قادر على إلغاء تثبيت مهارات التنسيق.",
         saveSelectionFailed: "غير قادر على حفظ اختيار مهارات التنسيق.",
+      },
+      sharedContext: {
+        statusFailed: "Unable to check shared AI context.",
+        syncFailed: "Unable to sync shared AI context.",
       },
     },
   },
@@ -2165,6 +2171,16 @@ export const ar: TranslationResources = {
           "سيتم حذف {{skills}} من ~/.agents و~/.claude و~/.codex. كما يُحذف كل ما أضفته داخل مجلدات المهارات تلك.",
         saveFailed: "تعذر حفظ اختيار المهارات.",
       },
+      sharedContext: {
+        title: "Shared AI context",
+        description: "Link detected AI clients to one prompt, skill library, and MCPProxy",
+        ready: "{{count}} detected AI clients use the shared context",
+        drift: "{{ready}} of {{count}} detected AI clients are synced",
+        proxyOffline: "MCPProxy is offline; start it before syncing",
+        syncTitle: "Sync shared AI context?",
+        syncMessage:
+          "Backs up changed provider files, links them to ~/.ai-shared, and preserves provider-only skills and MCP entries.",
+      },
       actions: {
         install: "ثَبَّتَ",
         installing: "جارٍ التثبيت...",
@@ -2175,6 +2191,9 @@ export const ar: TranslationResources = {
         uninstall: "إلغاء التثبيت",
         save: "حفظ",
         saving: "جارٍ الحفظ...",
+        sync: "Sync",
+        syncing: "Syncing...",
+        synced: "Synced",
       },
       operations: {
         add: "أضف مهارة",

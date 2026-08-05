@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { Pressable, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
-import { Archive, ChevronDown, ChevronRight, Unlink } from "lucide-react-native";
+import { Archive, ChevronDown, ChevronRight, Network, Unlink } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { getProviderIcon } from "@/components/provider-icons";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -22,6 +22,7 @@ import {
 const ThemedArchive = withUnistyles(Archive);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedChevronRight = withUnistyles(ChevronRight);
+const ThemedNetwork = withUnistyles(Network);
 const ThemedUnlink = withUnistyles(Unlink);
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
@@ -36,6 +37,8 @@ export interface SubagentsTrackProps {
   onArchiveSubagent: (id: string) => void;
   onArchiveFinished?: () => void;
   onDetachSubagent?: (id: string) => void;
+  /** Opens the swarm collaboration graph (React Flow) in its own tab. */
+  onOpenBoard?: () => void;
 }
 
 const SUBAGENTS_LIST_MAX_HEIGHT = 200;
@@ -57,6 +60,7 @@ export function SubagentsTrack({
   onArchiveSubagent,
   onArchiveFinished,
   onDetachSubagent,
+  onOpenBoard,
 }: SubagentsTrackProps): ReactElement | null {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -110,6 +114,18 @@ export function SubagentsTrack({
                 {headerLabel}
               </Text>
             </Pressable>
+            {onOpenBoard ? (
+              <View style={styles.headerAction}>
+                <SubagentActionButton
+                  accessibilityLabel={t("swarmBoard.openAction")}
+                  testID="subagents-track-open-board"
+                  tooltipLabel={t("swarmBoard.openTooltip")}
+                  icon="board"
+                  visible
+                  onPress={onOpenBoard}
+                />
+              </View>
+            ) : null}
             {finishedCount > 0 && onArchiveFinished ? (
               <View style={styles.headerAction}>
                 <SubagentActionButton
@@ -266,12 +282,15 @@ function SubagentRowActions({
   );
 }
 
-type SubagentActionIcon = "archive" | "detach";
+type SubagentActionIcon = "archive" | "detach" | "board";
 
 function renderSubagentActionIcon(icon: SubagentActionIcon, isActive: boolean): ReactElement {
   const uniProps = isActive ? foregroundColorMapping : foregroundMutedColorMapping;
   if (icon === "detach") {
     return <ThemedUnlink size={14} uniProps={uniProps} />;
+  }
+  if (icon === "board") {
+    return <ThemedNetwork size={14} uniProps={uniProps} />;
   }
   return <ThemedArchive size={14} uniProps={uniProps} />;
 }

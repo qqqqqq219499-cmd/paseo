@@ -244,7 +244,7 @@ export const ru: TranslationResources = {
       title: "Cluster",
       on: "On",
       off: "Off",
-      hint: "Run messages through cluster orchestration",
+      hint: "Включено: главный агент руководит — планирует в чате, делегирует задачи параллельным воркерам, за которыми можно следить на боковой панели, и подводит итоги. На простые вопросы он отвечает сразу, и вы можете продолжать общение в любой момент.",
       unsupported: "Upgrade your host to enable cluster mode",
     },
   },
@@ -576,7 +576,9 @@ export const ru: TranslationResources = {
       menu: {
         openFor: "Открыть меню для{{label}}",
         copyResumeCommand: "Копировать команду возобновления",
-        copyAgentId: "Скопировать идентификатор агента",
+        copyAgentId: "Скопировать подсказку возобновления",
+        agentRecallPrompt:
+          "Continue this session context: {{id}}\nRecall first with ccswitch-resume, then continue.",
         copyTerminalId: "Скопировать идентификатор терминала",
         copyFilePath: "Copy file path",
         rename: "Переименовать",
@@ -614,7 +616,7 @@ export const ru: TranslationResources = {
       },
       toasts: {
         copyFailed: "Не удалось скопировать",
-        agentIdCopiedLabel: "AgentID",
+        agentIdCopiedLabel: "Recall prompt",
         terminalIdCopiedLabel: "Идентификатор терминала",
         resumeCommandCopiedLabel: "команда возобновления",
         filePathCopiedLabel: "File path",
@@ -1314,6 +1316,10 @@ export const ru: TranslationResources = {
         updateFailed: "Невозможно обновить навыки оркестровки.",
         uninstallFailed: "Невозможно удалить навыки оркестровки.",
         saveSelectionFailed: "Не удалось сохранить выбор навыков оркестровки.",
+      },
+      sharedContext: {
+        statusFailed: "Unable to check shared AI context.",
+        syncFailed: "Unable to sync shared AI context.",
       },
     },
   },
@@ -2202,6 +2208,16 @@ export const ru: TranslationResources = {
           "{{skills}} будут удалены из ~/.agents, ~/.claude и ~/.codex. Всё, что вы добавили внутри этих папок навыков, тоже удаляется.",
         saveFailed: "Не удалось сохранить выбор навыков.",
       },
+      sharedContext: {
+        title: "Shared AI context",
+        description: "Link detected AI clients to one prompt, skill library, and MCPProxy",
+        ready: "{{count}} detected AI clients use the shared context",
+        drift: "{{ready}} of {{count}} detected AI clients are synced",
+        proxyOffline: "MCPProxy is offline; start it before syncing",
+        syncTitle: "Sync shared AI context?",
+        syncMessage:
+          "Backs up changed provider files, links them to ~/.ai-shared, and preserves provider-only skills and MCP entries.",
+      },
       actions: {
         install: "Установить",
         installing: "Установка...",
@@ -2212,6 +2228,9 @@ export const ru: TranslationResources = {
         uninstall: "Удалить",
         save: "Сохранить",
         saving: "Сохранение...",
+        sync: "Sync",
+        syncing: "Syncing...",
+        synced: "Synced",
       },
       operations: {
         add: "Добавить навык",

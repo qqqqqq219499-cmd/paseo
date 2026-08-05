@@ -1,6 +1,6 @@
 import { expect, test, vi } from "vitest";
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { linkSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -1368,6 +1368,77 @@ test("createAgent injects daemon append system prompt at runtime only", async ()
   expect(snapshot.config).not.toHaveProperty("daemonAppendSystemPrompt");
   expect(record?.config?.systemPrompt).toBe("Agent instructions.");
   expect(record?.config).not.toHaveProperty("daemonAppendSystemPrompt");
+});
+
+test("createAgent injects the canonical shared context and MCPProxy at runtime only", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-shared-context-"));
+  const sharedPromptPath = join(workdir, ".ai-shared", "AGENTS.md");
+  const sharedSkillsDir = join(workdir, ".ai-shared", "skills");
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const client = new TestAgentClient("codex");
+  mkdirSync(join(workdir, ".ai-shared"), { recursive: true });
+  writeFileSync(sharedPromptPath, "Shared instructions.", "utf8");
+  const manager = new AgentManager({
+    clients: { codex: client },
+    registry: storage,
+    logger,
+    appendSystemPrompt: "Daemon instructions.",
+    sharedContext: {
+      promptPath: sharedPromptPath,
+      skillsDir: sharedSkillsDir,
+      mcpProxyUrl: "http://127.0.0.1:8933/mcp/",
+    },
+    idFactory: () => "00000000-0000-4000-8000-000000000105",
+  });
+
+  const snapshot = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+  const record = await storage.get(snapshot.id);
+
+  expect(client.createdConfigs[0]?.daemonAppendSystemPrompt).toBe(
+    `Shared instructions.\n\nCanonical skills directory: ${sharedSkillsDir}\n\nDaemon instructions.`,
+  );
+  expect(client.createdConfigs[0]?.mcpServers?.mcpproxy).toEqual({
+    type: "http",
+    url: "http://127.0.0.1:8933/mcp/",
+  });
+  expect(snapshot.config).not.toHaveProperty("daemonAppendSystemPrompt");
+  expect(snapshot.config.mcpServers).toBeUndefined();
+  expect(record?.config).not.toHaveProperty("daemonAppendSystemPrompt");
+  expect(record?.config.mcpServers).toBeUndefined();
+});
+
+test("createAgent does not duplicate a canonical prompt already loaded by the native client", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-native-shared-context-"));
+  const sharedPromptPath = join(workdir, ".ai-shared", "AGENTS.md");
+  const sharedSkillsDir = join(workdir, ".ai-shared", "skills");
+  const nativePromptPath = join(workdir, ".codex", "AGENTS.md");
+  mkdirSync(join(workdir, ".ai-shared"), { recursive: true });
+  mkdirSync(join(workdir, ".codex"), { recursive: true });
+  writeFileSync(sharedPromptPath, "Shared instructions.", "utf8");
+  linkSync(sharedPromptPath, nativePromptPath);
+  const client = new TestAgentClient("codex");
+  const manager = new AgentManager({
+    clients: { codex: client },
+    logger,
+    appendSystemPrompt: "Daemon instructions.",
+    sharedContext: {
+      promptPath: sharedPromptPath,
+      skillsDir: sharedSkillsDir,
+      mcpProxyUrl: "http://127.0.0.1:8933/mcp/",
+      nativePromptPaths: { codex: nativePromptPath },
+    },
+    idFactory: () => "00000000-0000-4000-8000-000000000106",
+  });
+
+  await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+
+  expect(client.createdConfigs[0]?.daemonAppendSystemPrompt).toBe(
+    `Canonical skills directory: ${sharedSkillsDir}\n\nDaemon instructions.`,
+  );
 });
 
 test("daemon append system prompt is injected into Pi configs", async () => {

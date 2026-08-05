@@ -31,6 +31,7 @@ import {
   emitLiveTimelineItemIfAgentKnown,
 } from "../timeline-append.js";
 import { resolveCreateAgentIntent } from "./intent.js";
+import { assertClusterWorkerProviderAllowed } from "../cluster/worker-guardrail.js";
 import { registerAgentAutoArchive } from "../create-agent-lifecycle-dispatch.js";
 import { archiveAgentCommand } from "../lifecycle-command.js";
 
@@ -404,6 +405,14 @@ async function resolveMcpCreateAgent(
   const parentAgent = input.callerAgentId
     ? requireParentAgent(dependencies.agentManager, input.callerAgentId)
     : null;
+  // Cluster guardrail: when a cluster-mode CEO delegates, the worker must run on
+  // an allowed cheap/fast model (from the host cluster-worker.toml), never the
+  // CEO's own tier. No-op when the parent is not a cluster CEO or no allowlist
+  // is configured (keeps stock hosts unaffected).
+  await assertClusterWorkerProviderAllowed({
+    parentLabels: parentAgent?.labels,
+    requestedProvider: provider,
+  });
   const cwd = resolveMcpInitialCwd(input, parentAgent);
   const { resolvedCwd, setupContinuation, createdWorkspaceId, createdWorktree } =
     await resolveMcpCwd({

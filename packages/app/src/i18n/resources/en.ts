@@ -242,7 +242,7 @@ export const en = {
       title: "Cluster",
       on: "On",
       off: "Off",
-      hint: "Run messages through cluster orchestration",
+      hint: "On: the main agent leads — it plans in chat, delegates to parallel workers you can watch in the sidebar, then sums up the results. Small asks are answered directly, and you can keep chatting anytime.",
       unsupported: "Upgrade your host to enable cluster mode",
     },
   },
@@ -571,7 +571,9 @@ export const en = {
       menu: {
         openFor: "Open menu for {{label}}",
         copyResumeCommand: "Copy resume command",
-        copyAgentId: "Copy agent id",
+        copyAgentId: "Copy recall prompt",
+        agentRecallPrompt:
+          "Continue this session context: {{id}}\nRecall first with ccswitch-resume, then continue.",
         copyTerminalId: "Copy terminal id",
         copyFilePath: "Copy file path",
         rename: "Rename",
@@ -609,7 +611,7 @@ export const en = {
       },
       toasts: {
         copyFailed: "Copy failed",
-        agentIdCopiedLabel: "Agent ID",
+        agentIdCopiedLabel: "Recall prompt",
         terminalIdCopiedLabel: "Terminal ID",
         resumeCommandCopiedLabel: "resume command",
         filePathCopiedLabel: "File path",
@@ -1295,6 +1297,10 @@ export const en = {
         updateFailed: "Unable to update orchestration skills.",
         uninstallFailed: "Unable to uninstall orchestration skills.",
         saveSelectionFailed: "Unable to save the orchestration skills selection.",
+      },
+      sharedContext: {
+        statusFailed: "Unable to check shared AI context.",
+        syncFailed: "Unable to sync shared AI context.",
       },
     },
   },
@@ -2175,6 +2181,16 @@ export const en = {
           "{{skills}} will be deleted from ~/.agents, ~/.claude, and ~/.codex. Anything you added inside those skill folders is deleted too.",
         saveFailed: "Could not save your skill selection.",
       },
+      sharedContext: {
+        title: "Shared AI context",
+        description: "Link detected AI clients to one prompt, skill library, and MCPProxy",
+        ready: "{{count}} detected AI clients use the shared context",
+        drift: "{{ready}} of {{count}} detected AI clients are synced",
+        proxyOffline: "MCPProxy is offline; start it before syncing",
+        syncTitle: "Sync shared AI context?",
+        syncMessage:
+          "Backs up changed provider files, links them to ~/.ai-shared, and preserves provider-only skills and MCP entries.",
+      },
       actions: {
         install: "Install",
         installing: "Installing...",
@@ -2185,6 +2201,9 @@ export const en = {
         uninstall: "Uninstall",
         save: "Save",
         saving: "Saving...",
+        sync: "Sync",
+        syncing: "Syncing...",
+        synced: "Synced",
       },
       operations: {
         add: "Add skill",

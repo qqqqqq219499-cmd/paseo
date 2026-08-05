@@ -6,7 +6,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { i18n } from "@/i18n/i18next";
-import { useCliInstall, useSkillsStatus } from "./use-install-status";
+import { useCliInstall, useSharedContextStatus, useSkillsStatus } from "./use-install-status";
 
 const toast = vi.hoisted(() => ({
   error: vi.fn(),
@@ -22,6 +22,8 @@ const desktopDaemon = vi.hoisted(() => ({
   updateSkills: vi.fn(),
   uninstallSkills: vi.fn(),
   saveSkillsSelection: vi.fn(),
+  getSharedContextStatus: vi.fn(),
+  syncSharedContext: vi.fn(),
   shouldUseDesktopDaemon: vi.fn(() => true),
 }));
 
@@ -278,5 +280,76 @@ describe("useSkillsStatus", () => {
     });
     expect(toast.error).toHaveBeenCalledWith("Unable to install orchestration skills.");
     expect(console.error).toHaveBeenCalledWith("[Integrations] Failed to install skills", error);
+  });
+});
+
+describe("useSharedContextStatus", () => {
+  const drift = {
+    state: "drift",
+    canonical: { promptExists: true, skillsExist: true },
+    mcpProxyReachable: true,
+    providers: [
+      {
+        id: "codex",
+        label: "Codex",
+        detected: true,
+        prompt: "synced",
+        skills: "synced",
+        mcp: "drift",
+      },
+    ],
+  } as const;
+  const ready = {
+    state: "ready",
+    canonical: { promptExists: true, skillsExist: true },
+    mcpProxyReachable: true,
+    providers: [
+      {
+        id: "codex",
+        label: "Codex",
+        detected: true,
+        prompt: "synced",
+        skills: "synced",
+        mcp: "synced",
+      },
+    ],
+  } as const;
+
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    desktopDaemon.getSharedContextStatus.mockResolvedValue(drift);
+    desktopDaemon.syncSharedContext.mockResolvedValue(ready);
+  });
+
+  afterEach(() => {
+    void i18n.changeLanguage("en");
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  it("loads drift and replaces it with the sync response", async () => {
+    const { result } = renderDesktopHook(() => useSharedContextStatus());
+
+    await waitFor(() => expect(result.current.status).toEqual(drift));
+    await act(async () => {
+      await result.current.sync();
+    });
+
+    expect(desktopDaemon.syncSharedContext).toHaveBeenCalledOnce();
+    await waitFor(() => expect(result.current.status).toEqual(ready));
+  });
+
+  it("reports sync failures", async () => {
+    const error = new Error("sync failed");
+    desktopDaemon.syncSharedContext.mockRejectedValue(error);
+    const { result } = renderDesktopHook(() => useSharedContextStatus());
+
+    await waitFor(() => expect(result.current.status).toEqual(drift));
+    await act(async () => {
+      await result.current.sync();
+    });
+
+    await waitFor(() => expect(result.current.error).toBe(error));
+    expect(toast.error).toHaveBeenCalledWith("Unable to sync shared AI context.");
   });
 });

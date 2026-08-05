@@ -244,7 +244,7 @@ export const ja: TranslationResources = {
       title: "Cluster",
       on: "On",
       off: "Off",
-      hint: "Run messages through cluster orchestration",
+      hint: "オン:メインエージェントが司令塔となり、チャット内で計画を立て、サイドバーで確認できる並列ワーカーに作業を委任し、結果をまとめます。簡単な質問には直接回答し、いつでも会話を続けられます。",
       unsupported: "Upgrade your host to enable cluster mode",
     },
   },
@@ -576,7 +576,9 @@ export const ja: TranslationResources = {
       menu: {
         openFor: "{{label}}のメニューを開く",
         copyResumeCommand: "再開コマンドをコピー",
-        copyAgentId: "エージェントIDをコピー",
+        copyAgentId: "再開プロンプトをコピー",
+        agentRecallPrompt:
+          "Continue this session context: {{id}}\nRecall first with ccswitch-resume, then continue.",
         copyTerminalId: "ターミナルIDをコピー",
         copyFilePath: "ファイルパスをコピー",
         rename: "名前を変更",
@@ -615,7 +617,7 @@ export const ja: TranslationResources = {
       },
       toasts: {
         copyFailed: "コピーに失敗しました",
-        agentIdCopiedLabel: "エージェントID",
+        agentIdCopiedLabel: "再開プロンプト",
         terminalIdCopiedLabel: "ターミナルID",
         resumeCommandCopiedLabel: "再開コマンド",
         filePathCopiedLabel: "ファイルパス",
@@ -1298,6 +1300,10 @@ export const ja: TranslationResources = {
         updateFailed: "オーケストレーションスキルを更新できません。",
         uninstallFailed: "オーケストレーションスキルをアンインストールできません。",
         saveSelectionFailed: "オーケストレーションスキルの選択を保存できません。",
+      },
+      sharedContext: {
+        statusFailed: "Unable to check shared AI context.",
+        syncFailed: "Unable to sync shared AI context.",
       },
     },
   },
@@ -2184,6 +2190,16 @@ export const ja: TranslationResources = {
           "{{skills}} を ~/.agents、~/.claude、~/.codex から削除します。それらのスキルフォルダー内に追加したものもすべて削除されます。",
         saveFailed: "スキルの選択を保存できませんでした。",
       },
+      sharedContext: {
+        title: "Shared AI context",
+        description: "Link detected AI clients to one prompt, skill library, and MCPProxy",
+        ready: "{{count}} detected AI clients use the shared context",
+        drift: "{{ready}} of {{count}} detected AI clients are synced",
+        proxyOffline: "MCPProxy is offline; start it before syncing",
+        syncTitle: "Sync shared AI context?",
+        syncMessage:
+          "Backs up changed provider files, links them to ~/.ai-shared, and preserves provider-only skills and MCP entries.",
+      },
       actions: {
         install: "インストール",
         installing: "インストール中...",
@@ -2194,6 +2210,9 @@ export const ja: TranslationResources = {
         uninstall: "アンインストール",
         save: "保存",
         saving: "保存中...",
+        sync: "Sync",
+        syncing: "Syncing...",
+        synced: "Synced",
       },
       operations: {
         add: "スキルを追加",

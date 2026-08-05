@@ -109,6 +109,7 @@ import {
 } from "../provider-launch-config.js";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { appendOrReplaceGrowingAssistantMessage, runProviderTurn } from "./provider-runner.js";
+import { composeSystemPromptParts } from "../system-prompt.js";
 import {
   buildStringCommandShellInvocation,
   createStringCommandShellEnvOverlay,
@@ -1424,6 +1425,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   private historyPending = false;
   private replayingHistory = false;
   private bootstrapThreadEventPending = false;
+  private systemContextPending = true;
   private readonly terminateProcess: ProcessTerminator;
 
   constructor(config: AgentSessionConfig, options: ACPAgentSessionOptions) {
@@ -1601,7 +1603,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       .prompt({
         sessionId: this.sessionId,
         messageId,
-        prompt: toACPContentBlocks(prompt),
+        prompt: this.toPromptContentBlocks(prompt),
       })
       .then((response) => {
         this.handlePromptResponse(response, turnId);
@@ -1620,6 +1622,25 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       });
 
     return { turnId };
+  }
+
+  private toPromptContentBlocks(prompt: AgentPromptInput): ContentBlock[] {
+    const blocks = toACPContentBlocks(prompt);
+    if (!this.systemContextPending) return blocks;
+    this.systemContextPending = false;
+    const systemContext = composeSystemPromptParts(
+      this.config.systemPrompt,
+      this.config.daemonAppendSystemPrompt,
+    );
+    return systemContext
+      ? [
+          {
+            type: "text",
+            text: `<paseo-system>\n${systemContext}\n</paseo-system>`,
+          },
+          ...blocks,
+        ]
+      : blocks;
   }
 
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {

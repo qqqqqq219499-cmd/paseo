@@ -246,7 +246,7 @@ export const fr: TranslationResources = {
       title: "Cluster",
       on: "On",
       off: "Off",
-      hint: "Run messages through cluster orchestration",
+      hint: "Activé : l'agent principal pilote — il planifie dans le chat, délègue à des workers parallèles visibles dans la barre latérale, puis synthétise les résultats. Les demandes simples reçoivent une réponse directe, et vous pouvez continuer à discuter à tout moment.",
       unsupported: "Upgrade your host to enable cluster mode",
     },
   },
@@ -576,7 +576,9 @@ export const fr: TranslationResources = {
       menu: {
         openFor: "Ouvrir le menu pour{{label}}",
         copyResumeCommand: "Copier la commande de reprise",
-        copyAgentId: "Copier l'identifiant de l'agent",
+        copyAgentId: "Copier l'invite de reprise",
+        agentRecallPrompt:
+          "Continue this session context: {{id}}\nRecall first with ccswitch-resume, then continue.",
         copyTerminalId: "Copier l'identifiant du terminal",
         copyFilePath: "Copy file path",
         rename: "Rebaptiser",
@@ -615,7 +617,7 @@ export const fr: TranslationResources = {
       },
       toasts: {
         copyFailed: "Échec de la copie",
-        agentIdCopiedLabel: "AgentID",
+        agentIdCopiedLabel: "Recall prompt",
         terminalIdCopiedLabel: "Identifiant du terminal",
         resumeCommandCopiedLabel: "reprendre la commande",
         filePathCopiedLabel: "File path",
@@ -1328,6 +1330,10 @@ export const fr: TranslationResources = {
         uninstallFailed: "Impossible de désinstaller les compétences d'orchestration.",
         saveSelectionFailed:
           "Impossible d'enregistrer la sélection des compétences d'orchestration.",
+      },
+      sharedContext: {
+        statusFailed: "Unable to check shared AI context.",
+        syncFailed: "Unable to sync shared AI context.",
       },
     },
   },
@@ -2219,6 +2225,16 @@ export const fr: TranslationResources = {
           "{{skills}} seront supprimées de ~/.agents, ~/.claude et ~/.codex. Tout ce que vous avez ajouté dans ces dossiers de compétences est également supprimé.",
         saveFailed: "Impossible d'enregistrer votre sélection de compétences.",
       },
+      sharedContext: {
+        title: "Shared AI context",
+        description: "Link detected AI clients to one prompt, skill library, and MCPProxy",
+        ready: "{{count}} detected AI clients use the shared context",
+        drift: "{{ready}} of {{count}} detected AI clients are synced",
+        proxyOffline: "MCPProxy is offline; start it before syncing",
+        syncTitle: "Sync shared AI context?",
+        syncMessage:
+          "Backs up changed provider files, links them to ~/.ai-shared, and preserves provider-only skills and MCP entries.",
+      },
       actions: {
         install: "Installer",
         installing: "Installation...",
@@ -2229,6 +2245,9 @@ export const fr: TranslationResources = {
         uninstall: "Désinstaller",
         save: "Enregistrer",
         saving: "Enregistrement...",
+        sync: "Sync",
+        syncing: "Syncing...",
+        synced: "Synced",
       },
       operations: {
         add: "Ajouter une compétence",

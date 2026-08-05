@@ -27,9 +27,8 @@ export function normalizeWorkspaceTabTarget(
       : null;
   }
   if (value.kind === "swarm_board") {
-    // Removed custom SW panel: reopen the parent agent instead of a dead tab kind.
     const parentAgentId = trimNonEmpty(value.parentAgentId);
-    return parentAgentId ? { kind: "agent", agentId: parentAgentId } : null;
+    return parentAgentId ? { kind: "swarm_board", parentAgentId } : null;
   }
   if (value.kind === "file") {
     return normalizeFileTabTarget(value);

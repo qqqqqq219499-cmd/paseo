@@ -2853,7 +2853,8 @@ function WorkspaceScreenContent({
     async (agentId: string) => {
       if (!agentId) return;
       try {
-        await Clipboard.setStringAsync(agentId);
+        const text = t("workspace.tabs.menu.agentRecallPrompt", { id: agentId });
+        await Clipboard.setStringAsync(text);
         toast.copied(t("workspace.tabs.toasts.agentIdCopiedLabel"));
       } catch {
         toast.error(t("workspace.tabs.toasts.copyFailed"));

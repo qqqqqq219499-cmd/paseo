@@ -127,6 +127,7 @@ import type { LocalSpeechProviderConfig } from "./speech/providers/local/config.
 import type { RequestedSpeechProviders } from "./speech/speech-types.js";
 import { createSpeechService } from "./speech/speech-runtime.js";
 import { AgentManager } from "./agent/agent-manager.js";
+import { resolveRuntimeSharedContext } from "./agent/runtime-shared-context.js";
 import { AgentStorage } from "./agent/agent-storage.js";
 import { rebuildDependencySchedules } from "./agent/dependency-scheduler.js";
 import { attachAgentStoragePersistence } from "./persistence-hooks.js";
@@ -855,6 +856,7 @@ export async function createPaseoDaemon(
     providerDefinitions: initialAgentManagerState.providerDefinitions,
     registry: agentStorage,
     appendSystemPrompt: config.appendSystemPrompt,
+    sharedContext: resolveRuntimeSharedContext(),
     onWorkspaceStateMayHaveChanged: ({ cwd }) => {
       workspaceGitService.onWorkspaceStateMayHaveChanged(cwd);
     },

@@ -69,10 +69,7 @@ import {
   ClusterSendGateError,
   type ClusterSendGateDecision,
 } from "./agent/cluster/send-gate.js";
-import {
-  CLUSTER_RUN_ALREADY_ACTIVE_ERROR,
-  tryAcquireClusterRun,
-} from "./agent/cluster/run-registry.js";
+import { CLUSTER_RUN_QUEUED_NOTICE, tryAcquireClusterRun } from "./agent/cluster/run-registry.js";
 import {
   CLUSTER_TOOLS_DISABLED_ERROR,
   shouldSkipCluster,
@@ -80,6 +77,11 @@ import {
   type ClusterPlanTask,
   type ClusterSpawnTask,
 } from "./agent/cluster/orchestrator.js";
+import { shouldRouteCreateInitialThroughCluster } from "./agent/cluster/create-initial.js";
+import {
+  isClusterLegacyHardPathEnabled,
+  readCeoInstructions,
+} from "./agent/cluster/ceo-instructions.js";
 import { runClusterPlanner } from "./agent/cluster/planner.js";
 import { resolveClusterWorkerProfile } from "./agent/cluster/preferences.js";
 import { runClusterReview, type ClusterReviewPort } from "./agent/cluster/review-run.js";
@@ -292,6 +294,30 @@ const MIN_VERSION_EXPLICIT_WORKSPACE_RECOVERY = "0.1.105";
 /** Cluster long tasks cannot carry images/attachments this phase (explicit failure). */
 const CLUSTER_ATTACHMENTS_UNSUPPORTED_ERROR =
   "Cluster mode does not support images or attachments this phase.";
+
+/** Visible when cluster mode takes over a user message (before planner fan-out). */
+const CLUSTER_PLANNING_NOTICE =
+  "Cluster mode took over this message. Planning parallel workers now — the main agent will summarize after they finish. Leave the Cluster toggle on; further messages queue until this run ends.";
+
+interface ClusterQueuedMessage {
+  text: string;
+  messageId?: string;
+  images?: Array<{ data: string; mimeType: string }>;
+  attachments?: AgentAttachment[];
+  /** User message already written to the timeline when the queue accepted it. */
+  alreadyPersisted?: boolean;
+}
+
+function formatClusterSpawnedNotice(
+  workers: Array<{ title: string; role: string; id: string }>,
+): string {
+  const lines = workers.map((worker, index) => {
+    const title = worker.title.trim() || worker.id;
+    return `${index + 1}. ${title} (${worker.role})`;
+  });
+  return `Cluster spawned ${workers.length} worker(s):\n${lines.join("\n")}\nWaiting for results…`;
+}
+
 function errorToFriendlyMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
@@ -657,6 +683,8 @@ export class Session {
   private readonly viewedTimelineAgentIdsBySource = new Map<object, Set<string>>();
   private readonly clientCapabilitiesBySource = new Map<object, ReadonlySet<ClientCapability>>();
   private readonly defaultTimelineSubscriptionSource = {};
+  /** Follow-up prompts accepted while a cluster run holds the per-agent lock. */
+  private readonly clusterFollowUpQueue = new Map<string, ClusterQueuedMessage[]>();
   private unsubscribeTerminalWorkspaceContributionEvents: (() => void) | null = null;
   private readonly agentUpdates: AgentUpdatesService;
   private workspaceUpdatesSubscription: WorkspaceUpdatesSubscriptionState | null = null;
@@ -3151,20 +3179,7 @@ export class Session {
    * Handle create agent request
    */
   private async handleCreateAgentRequest(msg: CreateAgentRequestMessage): Promise<void> {
-    const {
-      config,
-      worktreeName,
-      requestId,
-      initialPrompt,
-      clientMessageId,
-      outputSchema,
-      git,
-      worktree,
-      autoArchive,
-      images,
-      attachments,
-      env,
-    } = msg;
+    const { config, worktreeName, requestId, autoArchive } = msg;
     this.sessionLogger.info(
       { cwd: config.cwd, provider: config.provider, worktreeName },
       `Creating agent in ${config.cwd} (${config.provider})${
@@ -3172,95 +3187,36 @@ export class Session {
       }`,
     );
 
-    let createdWorktreeForCleanup: CreatePaseoWorktreeWorkflowResult | null = null;
-    let createdAgentId: string | null = null;
+    const cleanup = {
+      createdWorktree: null as CreatePaseoWorktreeWorkflowResult | null,
+      createdAgentId: null as string | null,
+    };
     try {
-      const requestedCwd = resolve(config.cwd);
-      const needsRequestedDirectory =
-        Boolean(worktreeName || git || worktree) || (!msg.workspaceId && !msg.callerAgentId);
-      if (needsRequestedDirectory && !(await this.filesystem.isDirectory(requestedCwd))) {
-        throw new Error(`Working directory does not exist or is not a directory: ${requestedCwd}`);
-      }
-      const trimmedPrompt = initialPrompt?.trim();
-      const { provisionalTitle } = resolveCreateAgentTitles({
-        configTitle: config.title,
-        initialPrompt: trimmedPrompt,
-      });
+      const created = await this.createSessionAgentWithOptionalCluster(msg, cleanup);
 
-      const firstAgentContext: FirstAgentContext = {
-        ...(trimmedPrompt ? { prompt: trimmedPrompt } : {}),
-        ...(attachments && attachments.length > 0 ? { attachments } : {}),
-      };
-      const workspacePromptTitle = resolveFirstAgentPromptTitle(firstAgentContext);
-      const createdWorktree = await this.createAgentLifecycleDispatch.createWorktreeForRequest({
-        cwd: config.cwd,
-        target: worktree,
-        firstAgentContext,
-        hasLegacyGitOptions: Boolean(git),
-      });
-      createdWorktreeForCleanup = createdWorktree;
-      const resolvedIntent = await this.resolveSessionCreateAgentIntent({
-        request: msg,
-        createdWorktree,
-        workspacePromptTitle,
-      });
-      const resolvedCwd = resolve(resolvedIntent.config.cwd);
-      if (!(await this.filesystem.isDirectory(resolvedCwd))) {
-        throw new Error(`Working directory does not exist or is not a directory: ${resolvedCwd}`);
-      }
-
-      const { snapshot, liveSnapshot } = await createAgentCommand(
-        {
-          agentManager: this.agentManager,
-          agentStorage: this.agentStorage,
-          logger: this.sessionLogger,
-          paseoHome: this.paseoHome,
-          worktreesRoot: this.worktreesRoot,
-          providerSnapshotManager: this.providerSnapshotManager,
-        },
-        {
-          kind: "session",
-          config: resolvedIntent.config,
-          workspaceId: resolvedIntent.intent.workspaceId,
-          worktreeName,
-          initialPrompt,
-          clientMessageId,
-          outputSchema,
-          images,
-          attachments,
-          git,
-          labels: resolvedIntent.intent.labels,
-          env,
-          provisionalTitle,
-          firstAgentContext,
-          buildSessionConfig: (sessionConfig, gitOptions, legacyWorktreeName, ctx) =>
-            this.buildAgentSessionConfig(sessionConfig, gitOptions, legacyWorktreeName, ctx),
-        },
-      );
-      createdAgentId = snapshot.id;
-      await this.agentUpdates.forwardLiveAgent(snapshot);
-      if (resolvedIntent.createdDirectoryWorkspace && trimmedPrompt) {
+      await this.agentUpdates.forwardLiveAgent(created.snapshot);
+      if (created.scheduleDirectoryAutoName) {
         this.workspaceAutoName.scheduleForDirectory(
           {
-            workspaceId: resolvedIntent.intent.workspaceId,
-            cwd: resolvedIntent.config.cwd,
-            firstAgentContext,
+            workspaceId: created.workspaceId,
+            cwd: created.cwd,
+            firstAgentContext: created.firstAgentContext,
           },
-          { currentSelection: this.getFocusedAgentSelectionForCwd(resolvedIntent.config.cwd) },
+          { currentSelection: this.getFocusedAgentSelectionForCwd(created.cwd) },
         );
       }
       this.createAgentLifecycleDispatch.registerAutoArchiveIfRequested({
         autoArchive,
-        agentId: snapshot.id,
-        createdWorktree,
+        agentId: created.snapshot.id,
+        createdWorktree: created.createdWorktree,
       });
       if (requestId) {
-        const agentPayload = await this.buildAgentPayload(liveSnapshot);
+        const agentPayload = await this.buildAgentPayload(created.liveSnapshot);
         this.emit({
           type: "status",
           payload: {
             status: "agent_created",
-            agentId: liveSnapshot.id,
+            agentId: created.liveSnapshot.id,
             requestId,
             agent: agentPayload,
           },
@@ -3268,13 +3224,13 @@ export class Session {
       }
 
       this.sessionLogger.info(
-        { agentId: snapshot.id, provider: snapshot.provider },
-        `Created agent ${snapshot.id} (${snapshot.provider})`,
+        { agentId: created.snapshot.id, provider: created.snapshot.provider },
+        `Created agent ${created.snapshot.id} (${created.snapshot.provider})`,
       );
     } catch (error) {
       await this.createAgentLifecycleDispatch.cleanupCreatedWorktreeAfterFailedAgentCreate({
-        createdWorktree: createdWorktreeForCleanup,
-        createdAgentId,
+        createdWorktree: cleanup.createdWorktree,
+        createdAgentId: cleanup.createdAgentId,
       });
       const wireError = toWorktreeWireError(error);
       this.sessionLogger.error({ err: error }, "Failed to create agent");
@@ -3299,6 +3255,200 @@ export class Session {
         },
       });
     }
+  }
+
+  /**
+   * Resolve placement, create the agent, and optionally hand the first prompt to
+   * the cluster gate (so cluster-mode create no longer skips fan-out).
+   */
+  private async createSessionAgentWithOptionalCluster(
+    msg: CreateAgentRequestMessage,
+    cleanup: {
+      createdWorktree: CreatePaseoWorktreeWorkflowResult | null;
+      createdAgentId: string | null;
+    },
+  ): Promise<{
+    snapshot: ManagedAgent;
+    liveSnapshot: ManagedAgent;
+    createdWorktree: CreatePaseoWorktreeWorkflowResult | null;
+    workspaceId: string;
+    cwd: string;
+    firstAgentContext: FirstAgentContext;
+    scheduleDirectoryAutoName: boolean;
+  }> {
+    const {
+      config,
+      worktreeName,
+      initialPrompt,
+      clientMessageId,
+      outputSchema,
+      git,
+      worktree,
+      images,
+      attachments,
+      env,
+    } = msg;
+
+    const requestedCwd = resolve(config.cwd);
+    const needsRequestedDirectory =
+      Boolean(worktreeName || git || worktree) || (!msg.workspaceId && !msg.callerAgentId);
+    if (needsRequestedDirectory && !(await this.filesystem.isDirectory(requestedCwd))) {
+      throw new Error(`Working directory does not exist or is not a directory: ${requestedCwd}`);
+    }
+    const trimmedPrompt = initialPrompt?.trim();
+    const { provisionalTitle } = resolveCreateAgentTitles({
+      configTitle: config.title,
+      initialPrompt: trimmedPrompt,
+    });
+
+    const firstAgentContext: FirstAgentContext = {
+      ...(trimmedPrompt ? { prompt: trimmedPrompt } : {}),
+      ...(attachments && attachments.length > 0 ? { attachments } : {}),
+    };
+    const workspacePromptTitle = resolveFirstAgentPromptTitle(firstAgentContext);
+    const createdWorktree = await this.createAgentLifecycleDispatch.createWorktreeForRequest({
+      cwd: config.cwd,
+      target: worktree,
+      firstAgentContext,
+      hasLegacyGitOptions: Boolean(git),
+    });
+    cleanup.createdWorktree = createdWorktree;
+    const resolvedIntent = await this.resolveSessionCreateAgentIntent({
+      request: msg,
+      createdWorktree,
+      workspacePromptTitle,
+    });
+    const resolvedCwd = resolve(resolvedIntent.config.cwd);
+    if (!(await this.filesystem.isDirectory(resolvedCwd))) {
+      throw new Error(`Working directory does not exist or is not a directory: ${resolvedCwd}`);
+    }
+
+    // Cluster Mode: create was missing the send gate. With labels + prompt,
+    // create idle then reuse the same gate as follow-up send.
+    const routeInitialThroughCluster = shouldRouteCreateInitialThroughCluster(
+      resolvedIntent.intent.labels,
+      trimmedPrompt,
+    );
+    this.assertClusterCreatePreconditions(routeInitialThroughCluster, images, attachments);
+
+    const { snapshot, liveSnapshot: createdLive } = await createAgentCommand(
+      {
+        agentManager: this.agentManager,
+        agentStorage: this.agentStorage,
+        logger: this.sessionLogger,
+        paseoHome: this.paseoHome,
+        worktreesRoot: this.worktreesRoot,
+        providerSnapshotManager: this.providerSnapshotManager,
+      },
+      {
+        kind: "session",
+        config: resolvedIntent.config,
+        workspaceId: resolvedIntent.intent.workspaceId,
+        worktreeName,
+        // Defer first prompt when cluster owns it; titles still use context above.
+        initialPrompt: routeInitialThroughCluster ? undefined : initialPrompt,
+        clientMessageId: routeInitialThroughCluster ? undefined : clientMessageId,
+        outputSchema,
+        images: routeInitialThroughCluster ? undefined : images,
+        attachments: routeInitialThroughCluster ? undefined : attachments,
+        git,
+        labels: resolvedIntent.intent.labels,
+        env,
+        provisionalTitle,
+        firstAgentContext,
+        buildSessionConfig: (sessionConfig, gitOptions, legacyWorktreeName, ctx) =>
+          this.buildAgentSessionConfig(sessionConfig, gitOptions, legacyWorktreeName, ctx),
+      },
+    );
+    cleanup.createdAgentId = snapshot.id;
+
+    const liveSnapshot =
+      routeInitialThroughCluster && trimmedPrompt
+        ? await this.routeCreateInitialPromptThroughCluster({
+            agentId: snapshot.id,
+            text: trimmedPrompt,
+            clientMessageId,
+            images,
+            attachments,
+          })
+        : createdLive;
+
+    return {
+      snapshot,
+      liveSnapshot,
+      createdWorktree,
+      workspaceId: resolvedIntent.intent.workspaceId,
+      cwd: resolvedIntent.config.cwd,
+      firstAgentContext,
+      scheduleDirectoryAutoName: Boolean(resolvedIntent.createdDirectoryWorkspace && trimmedPrompt),
+    };
+  }
+
+  private assertClusterCreatePreconditions(
+    routeInitialThroughCluster: boolean,
+    images: CreateAgentRequestMessage["images"],
+    attachments: CreateAgentRequestMessage["attachments"],
+  ): void {
+    if (!routeInitialThroughCluster) {
+      return;
+    }
+    // CEO lead mode (default) never hard-fails — it degrades to a normal turn
+    // inside applyClusterCeoLeadMode (tools off / attachments / trivia all just
+    // run a plain turn). Only the legacy hidden-planner path has hard
+    // preconditions worth failing before create to avoid an orphan agent.
+    if (!isClusterLegacyHardPathEnabled()) {
+      return;
+    }
+    const paseoToolsEnabled = this.daemonConfigStore.get().mcp.injectIntoAgents !== false;
+    if (!paseoToolsEnabled) {
+      throw new ClusterSendGateError(CLUSTER_TOOLS_DISABLED_ERROR);
+    }
+    if ((images?.length ?? 0) > 0 || (attachments?.length ?? 0) > 0) {
+      throw new ClusterSendGateError(CLUSTER_ATTACHMENTS_UNSUPPORTED_ERROR);
+    }
+  }
+
+  /**
+   * After create with cluster labels: run the same hard path as a follow-up send.
+   * Cluster owns the turn when handled; skip/continue still send to the main agent.
+   */
+  private async routeCreateInitialPromptThroughCluster(params: {
+    agentId: string;
+    text: string;
+    clientMessageId?: string;
+    images?: Array<{ data: string; mimeType: string }>;
+    attachments?: AgentAttachment[];
+  }): Promise<ManagedAgent> {
+    const clusterDecision = await this.applyClusterSendGate(params.agentId, {
+      text: params.text,
+      messageId: params.clientMessageId,
+      images: params.images,
+      attachments: params.attachments,
+    });
+
+    if (clusterDecision.action === "handled") {
+      const live = this.agentManager.getAgent(params.agentId);
+      if (!live) {
+        throw new Error(`Agent ${params.agentId} not found after cluster handoff`);
+      }
+      return live;
+    }
+
+    const prompt = buildAgentPrompt(params.text, params.images, params.attachments);
+    await sendPromptToAgent({
+      agentManager: this.agentManager,
+      agentStorage: this.agentStorage,
+      agentId: params.agentId,
+      prompt,
+      messageId: params.clientMessageId,
+      logger: this.sessionLogger,
+    });
+    await waitForAgentRunStartWithTimeout(this.agentManager, params.agentId);
+    const live = this.agentManager.getAgent(params.agentId);
+    if (!live) {
+      throw new Error(`Agent ${params.agentId} not found after single-agent fallback`);
+    }
+    return live;
   }
 
   private async resolveSessionCreateAgentIntent(input: {
@@ -6617,20 +6767,39 @@ export class Session {
   }
 
   /**
-   * Cluster Mode hard path (Phase 3): only on real user `send_agent_message_request`,
-   * before `sendPromptToAgent`. OFF is a no-op; skip continues single with a notice;
-   * tools-off and unsupported attachments fail synchronously (accepted=false); long
-   * tasks persist the user message, run the hidden planner + real spawn in the
-   * background, and return handled so the main agent never runs a normal provider turn.
+   * Cluster Mode send gate: real user prompts from follow-up send and from
+   * create initialPrompt (after the agent record exists). OFF is a no-op.
+   *
+   * Default (ON) is CEO lead mode: the main agent stays the single voice — it
+   * plans in chat and delegates via create_agent itself, so workers appear in
+   * the sidebar. See applyClusterCeoLeadMode. The legacy hidden-planner hard
+   * path (auto plan + auto spawn + background review) is kept behind
+   * PASEO_CLUSTER_LEGACY_HARDPATH=1 for rollback / regression testing.
+   *
+   * Must sit outside sendPromptToAgent / create initialPrompt so MCP, voice,
+   * finish notification, and system envelopes stay unhijacked.
    */
   private async applyClusterSendGate(
     agentId: string,
-    msg: Extract<SessionInboundMessage, { type: "send_agent_message_request" }>,
+    msg: {
+      text: string;
+      messageId?: string;
+      images?: Array<{ data: string; mimeType: string }>;
+      attachments?: AgentAttachment[];
+      /** When true, the user_message was already written (queued follow-up). */
+      alreadyPersisted?: boolean;
+    },
   ): Promise<ClusterSendGateDecision> {
     const live = this.agentManager.getAgent(agentId);
     const labels = live?.labels ?? (await this.agentStorage.get(agentId))?.labels ?? {};
     if (!isClusterModeEnabled(labels)) {
       return { action: "continue_single" };
+    }
+
+    // Default cluster behavior: the main agent leads (CEO). The legacy
+    // hidden-planner hard path below only runs when explicitly opted in.
+    if (!isClusterLegacyHardPathEnabled()) {
+      return await this.applyClusterCeoLeadMode(agentId, msg);
     }
 
     // AC1: tools off is a synchronous hard failure — never planning, never silent single.
@@ -6664,13 +6833,92 @@ export class Session {
       throw new ClusterSendGateError(CLUSTER_ATTACHMENTS_UNSUPPORTED_ERROR);
     }
 
-    // Long task: claim the single cluster-start slot, load the main agent, verify
-    // its workspace, persist the user message — all synchronously — then hand off
-    // to the background planner. Any failure here is a synchronous accepted:false
-    // and never starts a Planner.
+    // Long task path (or soft-queue when a run is already active).
+    return await this.startOrQueueClusterLongTask(agentId, msg);
+  }
+
+  /**
+   * Default cluster behavior: the main agent is the CEO. Instead of a hidden
+   * planner spawning workers behind the user's back, we prepend a CEO
+   * instruction block to the outgoing prompt and let the main agent run a
+   * normal turn — it plans in chat and delegates via create_agent itself.
+   *
+   * The user's original text is recorded to the timeline as-is (clean, no
+   * instruction block), then the CEO block + the user request are sent to the
+   * provider wrapped in a single <paseo-system> envelope so the provider sees
+   * the CEO context while the timeline suppresses the injected message (see
+   * isSystemInjectedEnvelope). Returns "handled" so the caller does not also
+   * send the raw prompt.
+   *
+   * Falls back to a plain single turn (continue_single) when Cluster is on but
+   * the turn should not carry CEO context: Paseo tools disabled (the CEO can't
+   * delegate), images/attachments present (envelope wrapping is text-only this
+   * path), or a trivial/greeting prompt. No hard failures, no hijack.
+   */
+  private async applyClusterCeoLeadMode(
+    agentId: string,
+    msg: {
+      text: string;
+      messageId?: string;
+      images?: Array<{ data: string; mimeType: string }>;
+      attachments?: AgentAttachment[];
+      alreadyPersisted?: boolean;
+    },
+  ): Promise<ClusterSendGateDecision> {
+    // No Paseo tools → the CEO cannot spawn workers. Run a normal single turn
+    // rather than injecting instructions it cannot act on.
+    const paseoToolsEnabled = this.daemonConfigStore.get().mcp.injectIntoAgents !== false;
+    if (!paseoToolsEnabled) {
+      return { action: "continue_single" };
+    }
+
+    // Images/attachments or trivial asks: let the main agent answer directly,
+    // no CEO framing. Attachments keep their normal (non-envelope) prompt path.
+    const hasAttachments = (msg.images?.length ?? 0) > 0 || (msg.attachments?.length ?? 0) > 0;
+    if (hasAttachments || shouldSkipCluster(msg.text).skip) {
+      return { action: "continue_single" };
+    }
+
+    await ensureAgentLoaded(agentId, {
+      agentManager: this.agentManager,
+      agentStorage: this.agentStorage,
+      logger: this.sessionLogger,
+    });
+
+    // Record the clean user message (unless a queued follow-up already did).
+    if (!msg.alreadyPersisted) {
+      await this.appendClusterUserMessage(agentId, msg);
+    }
+
+    // Send CEO instructions + the user request as one system-injected envelope.
+    // The provider treats it as context and responds; the timeline hides it.
+    const ceoInstructions = await readCeoInstructions();
+    const envelope = formatSystemNotificationPrompt(
+      `${ceoInstructions}\n\n<user-request>\n${msg.text}\n</user-request>`,
+    );
+    await sendPromptToAgent({
+      agentManager: this.agentManager,
+      agentStorage: this.agentStorage,
+      agentId,
+      prompt: envelope,
+      logger: this.sessionLogger,
+    });
+
+    return { action: "handled", state: { phase: "running", workerIds: [] } };
+  }
+
+  /**
+   * Claim the cluster-start lock, persist the user message, emit a planning
+   * notice, and hand off to the background planner. If the lock is held,
+   * soft-queue instead so the composer stays usable with Cluster still on.
+   */
+  private async startOrQueueClusterLongTask(
+    agentId: string,
+    msg: ClusterQueuedMessage,
+  ): Promise<ClusterSendGateDecision> {
     const release = tryAcquireClusterRun(this.agentManager, agentId);
     if (!release) {
-      throw new ClusterSendGateError(CLUSTER_RUN_ALREADY_ACTIVE_ERROR);
+      return await this.enqueueClusterFollowUp(agentId, msg);
     }
 
     let main: ManagedAgent;
@@ -6692,7 +6940,10 @@ export class Session {
       );
     }
     try {
-      await this.appendClusterUserMessage(agentId, msg);
+      if (!msg.alreadyPersisted) {
+        await this.appendClusterUserMessage(agentId, msg);
+      }
+      await this.appendClusterNotice(agentId, CLUSTER_PLANNING_NOTICE);
     } catch (error) {
       release();
       throw error;
@@ -6709,9 +6960,80 @@ export class Session {
     return { action: "handled", state: { phase: "planning" } };
   }
 
+  private async enqueueClusterFollowUp(
+    agentId: string,
+    msg: ClusterQueuedMessage,
+  ): Promise<ClusterSendGateDecision> {
+    await ensureAgentLoaded(agentId, {
+      agentManager: this.agentManager,
+      agentStorage: this.agentStorage,
+      logger: this.sessionLogger,
+    });
+    if (!msg.alreadyPersisted) {
+      await this.appendClusterUserMessage(agentId, msg);
+    }
+    const queue = this.clusterFollowUpQueue.get(agentId) ?? [];
+    queue.push({
+      text: msg.text,
+      messageId: msg.messageId,
+      images: msg.images,
+      attachments: msg.attachments,
+      alreadyPersisted: true,
+    });
+    this.clusterFollowUpQueue.set(agentId, queue);
+    await this.appendClusterNotice(
+      agentId,
+      `${CLUSTER_RUN_QUEUED_NOTICE} (queue depth: ${queue.length})`,
+    );
+    return { action: "handled", state: { phase: "running", workerIds: [] } };
+  }
+
+  private async drainClusterFollowUps(agentId: string): Promise<void> {
+    if (this.isCleanedUp) {
+      return;
+    }
+    const queue = this.clusterFollowUpQueue.get(agentId);
+    if (!queue?.length) {
+      return;
+    }
+    const next = queue.shift()!;
+    if (queue.length === 0) {
+      this.clusterFollowUpQueue.delete(agentId);
+    } else {
+      this.clusterFollowUpQueue.set(agentId, queue);
+    }
+
+    try {
+      const decision = await this.applyClusterSendGate(agentId, next);
+      if (decision.action === "handled") {
+        // A new background run owns further drain via its finally.
+        return;
+      }
+      const prompt = buildAgentPrompt(next.text, next.images, next.attachments);
+      await sendPromptToAgent({
+        agentManager: this.agentManager,
+        agentStorage: this.agentStorage,
+        agentId,
+        prompt,
+        messageId: next.messageId,
+        logger: this.sessionLogger,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.sessionLogger.error({ agentId, err: error }, "agent.session.cluster_followup_failed");
+      await this.appendClusterErrorTimeline(agentId, `Queued cluster message failed: ${message}`);
+    }
+
+    // Single-agent follow-ups (skip/continue) do not re-enter the cluster lock;
+    // keep draining remaining queued prompts.
+    if ((this.clusterFollowUpQueue.get(agentId)?.length ?? 0) > 0) {
+      void this.drainClusterFollowUps(agentId);
+    }
+  }
+
   private async appendClusterUserMessage(
     agentId: string,
-    msg: Extract<SessionInboundMessage, { type: "send_agent_message_request" }>,
+    msg: { text: string; messageId?: string },
   ): Promise<void> {
     const item: AgentTimelineItem = { type: "user_message", text: msg.text };
     if (msg.messageId) {
@@ -6726,6 +7048,17 @@ export class Session {
         "agent.session.cluster_user_message_append_failed",
       );
       throw error;
+    }
+  }
+
+  private async appendClusterNotice(agentId: string, text: string): Promise<void> {
+    try {
+      await this.agentManager.emitLiveTimelineItem(agentId, {
+        type: "assistant_message",
+        text,
+      });
+    } catch (error) {
+      this.sessionLogger.warn({ agentId, err: error }, "agent.session.cluster_notice_emit_failed");
     }
   }
 
@@ -6790,17 +7123,17 @@ export class Session {
 
       // Keep the full spawn result (plan + real UUID mapping) — the review
       // needs node id ↔ UUID, scope and criteria, not just workerIds.
-      let spawnResult: SpawnClusterWorkersResult | null = null;
-      const spawnTask: ClusterSpawnTask = (plan) =>
-        spawnClusterWorkers({
+      let spawnResult: SpawnClusterWorkersResult | undefined;
+      const spawnTask: ClusterSpawnTask = async (plan) => {
+        const result = await spawnClusterWorkers({
           plan,
           mainAgent: { id: main.id, cwd: main.cwd, workspaceId },
           createAgent,
           preferences: { paseoHome: this.paseoHome },
-        }).then((result) => {
-          spawnResult = result;
-          return result;
         });
+        spawnResult = result;
+        return result;
+      };
 
       const state = await startClusterRun({
         prompt: text,
@@ -6817,13 +7150,15 @@ export class Session {
         await this.appendClusterErrorTimeline(agentId, state.error);
         return;
       }
-      if (state.phase !== "running" || spawnResult === null) {
+      if (state.phase !== "running" || spawnResult === undefined) {
         this.sessionLogger.warn(
           { agentId, phase: state.phase },
           "agent.session.cluster_run_unexpected_phase",
         );
         return;
       }
+
+      await this.appendClusterNotice(agentId, formatClusterSpawnedNotice(spawnResult.plan.workers));
 
       report({ phase: "reviewing", workerIds: state.workerIds });
 
@@ -6837,6 +7172,11 @@ export class Session {
       report(review.final);
       if (review.final.phase === "failed") {
         await this.appendClusterErrorTimeline(agentId, review.final.error);
+      } else {
+        await this.appendClusterNotice(
+          agentId,
+          "Cluster run finished. Summary is on the main agent above.",
+        );
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -6844,6 +7184,7 @@ export class Session {
       await this.appendClusterErrorTimeline(agentId, `Cluster run failed: ${message}`);
     } finally {
       release();
+      void this.drainClusterFollowUps(agentId);
     }
   }
 
