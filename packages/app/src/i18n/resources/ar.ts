@@ -90,9 +90,11 @@ export const ar: TranslationResources = {
       desktop: "أرسل رسالة إلى الوكيل أو ضع علامة على @files أو استخدم /commands و /skills",
       mobile: "الرسالة، @files ، /commands",
       fallback: "رسالة...",
+      terminal: "Prompt",
     },
     input: {
       accessibilityLabel: "وكيل الرسائل...",
+      terminalAccessibilityLabel: "Terminal prompt",
       focusHint: "{{shortcut}}للتركيز",
       addAttachment: "إضافة مرفق",
       interruptAgent: "عامل المقاطعة",
@@ -266,7 +268,7 @@ export const ar: TranslationResources = {
     states: {
       notFound: "لم يتم العثور على Agent",
       failedToLoad: "فشل تحميل الوكيل",
-      reconnecting: "جارٍ إعادة الاتصال...",
+      reconnecting: "جارٍ إعادة الاتصال",
       timelineSyncFailed: "تعذر تحديث سجل الوكيل. جارٍ إعادة المحاولة…",
       archivingTitle: "وكيل الارشيف...",
       archivingSubtitle: "الرجاء الانتظار بينما نقوم بأرشفة هذا الوكيل.",
@@ -976,9 +978,14 @@ export const ar: TranslationResources = {
         host: "المضيف",
         changeRequest: "طلب السحب",
         checks: "الفحوصات",
-        scripts: "البرامج النصية",
+        services: "الخدمات",
         diff: "إحصائيات الفروق",
         timestamp: "آخر نشاط",
+      },
+      checks: {
+        iconAndText: "أيقونة ونص",
+        icon: "أيقونة فقط",
+        none: "مخفي",
       },
       hostFilter: {
         label: "المضيف",
@@ -1060,7 +1067,8 @@ export const ar: TranslationResources = {
     },
     workspace: {
       status: {
-        scriptsAvailable: "البرامج النصية المتاحة",
+        serviceRunning: "الخدمة {{name}} قيد التشغيل",
+        serviceUnhealthy: "الخدمة {{name}} غير سليمة",
         creating: "جارٍ الإنشاء...",
       },
       actions: {
@@ -1122,14 +1130,29 @@ export const ar: TranslationResources = {
       composerStateRequired: "حالة الملحن مطلوبة",
       selectModel: "اختر نموذجا",
     },
+    tooltips: {
+      project: "Choose the project",
+      host: "Choose the host",
+      isolation: "Choose the isolation level",
+      startingRef: "اختر من أين تبدأ",
+      launch: "Choose what to launch",
+    },
     refPicker: {
       startingRef: "بدء المرجع",
-      chooseStart: "اختر من أين تبدأ",
       intoBase: "إلى {{baseRef}}",
       searching: "جارٍ البحث...",
       noMatchingRefs: "لا توجد مراجع مطابقة.",
       searchPlaceholder: "بحث الفروع والعلاقات العامة",
       title: "ابدأ من",
+    },
+    launch: {
+      title: "What to launch",
+      chat: "Chat",
+      terminal: "Terminal",
+      manageProfiles: "Manage profiles",
+      submit: "Launch",
+      promptPlaceholder: "Prompt {{name}}",
+      commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
   },
   desktop: {
@@ -1478,6 +1501,19 @@ export const ar: TranslationResources = {
         label: "متقدم",
         show: "عرض متقدم",
         hide: "إخفاء المتقدمة",
+      },
+      headers: {
+        title: "رؤوس مخصصة",
+        add: "إضافة رأس",
+        name: "الاسم",
+        value: "القيمة",
+        remove: "إزالة الرأس",
+        errors: {
+          missingName: "أدخل اسمًا لكل رأس",
+          invalidName: "{{name}} ليس اسم رأس صالحًا",
+          invalidValue: "يحتوي {{name}} على فاصل أسطر غير صالح",
+          duplicateName: "تم إدخال {{name}} أكثر من مرة",
+        },
       },
       passwordVisibility: {
         show: "إظهار كلمة المرور",
@@ -1963,6 +1999,7 @@ export const ar: TranslationResources = {
           es: "Español",
           fr: "Français",
           ja: "日本語",
+          ko: "한국어",
           ptBR: "Português brasileiro",
           ru: "Русский",
           zhCN: "中文",

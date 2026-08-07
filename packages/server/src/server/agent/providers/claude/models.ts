@@ -5,6 +5,7 @@ import type { Logger } from "pino";
 
 import type { AgentModelDefinition } from "../../agent-sdk-types.js";
 import {
+  getClaudeCustomModelThinkingOptions,
   getClaudeManifestModels,
   normalizeClaudeManifestModelId,
   normalizeClaudeRuntimeModelId as normalizeClaudeManifestRuntimeModelId,
@@ -20,6 +21,21 @@ const CLAUDE_SETTINGS_MODEL_ENV_KEYS = [
 
 export function getClaudeModels(claudeCodeVersion?: string): AgentModelDefinition[] {
   return getClaudeManifestModels(claudeCodeVersion);
+}
+
+export function resolveConfiguredClaudeModel(model: AgentModelDefinition): AgentModelDefinition {
+  if (model.thinkingOptions !== undefined) return model;
+
+  const manifestModelId = normalizeClaudeManifestModelId(model.id);
+  const manifestModel = manifestModelId
+    ? getClaudeModels().find((candidate) => candidate.id === manifestModelId)
+    : undefined;
+  if (manifestModel) {
+    return manifestModel.thinkingOptions
+      ? { ...model, thinkingOptions: manifestModel.thinkingOptions }
+      : model;
+  }
+  return { ...model, thinkingOptions: getClaudeCustomModelThinkingOptions() };
 }
 
 export function findClaudeModel(
@@ -43,11 +59,15 @@ export async function getClaudeModelsWithSettings(
     return hardcodedModels;
   }
 
-  const seenModelIds = new Set(hardcodedModels.map((model) => model.id));
   const models = [...hardcodedModels];
 
   for (const model of settingsModels) {
-    if (seenModelIds.has(model.id)) {
+    const existingIndex = models.findIndex((candidate) => candidate.id === model.id);
+    if (existingIndex !== -1) {
+      const existing = models[existingIndex];
+      if (existing?.isSelectable === false) {
+        models[existingIndex] = { ...existing, ...model, isSelectable: true };
+      }
       continue;
     }
     // First-party model strings (e.g. "claude-fable-5[1m]" or a dated ID) are
@@ -56,10 +76,9 @@ export async function getClaudeModelsWithSettings(
     // window metadata. Provider-prefixed IDs (Bedrock, OpenRouter, gateways)
     // normalize to null here and stay as-is.
     const manifestModelId = normalizeClaudeManifestModelId(model.id);
-    if (manifestModelId && seenModelIds.has(manifestModelId)) {
+    if (manifestModelId && models.some((candidate) => candidate.id === manifestModelId)) {
       continue;
     }
-    seenModelIds.add(model.id);
     models.push(model);
   }
 
@@ -159,8 +178,8 @@ const CLAUDE_PLACEHOLDER_MODEL_IDS = new Set(["<synthetic>"]);
  * (docs/custom-providers.md) among them. Manifest-only resolution would blank the model for
  * exactly those users.
  *
- * Note a `[1m]` suffix is preserved where it names its own manifest entry: a 1M-context variant
- * is a distinct model with a distinct context window, not a spelling of the 200K one.
+ * A `[1m]` suffix is preserved where it names its own manifest entry. Models such as Fable 5
+ * that only have a 1M entry normalize the retired suffixed spelling to the canonical ID.
  *
  * Returns null for placeholders and empty values, meaning "not observed".
  */

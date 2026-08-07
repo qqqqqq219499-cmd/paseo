@@ -90,9 +90,11 @@ export const ja: TranslationResources = {
       desktop: "エージェントにメッセージ、@ファイル、/コマンドや/スキルを入力",
       mobile: "メッセージ、@ファイル、/コマンド",
       fallback: "メッセージ...",
+      terminal: "Prompt",
     },
     input: {
       accessibilityLabel: "エージェントにメッセージ...",
+      terminalAccessibilityLabel: "Terminal prompt",
       focusHint: "{{shortcut}}でフォーカス",
       addAttachment: "添付ファイルを追加",
       interruptAgent: "エージェントを中断",
@@ -266,7 +268,7 @@ export const ja: TranslationResources = {
     states: {
       notFound: "エージェントが見つかりません",
       failedToLoad: "エージェントの読み込みに失敗しました",
-      reconnecting: "再接続中...",
+      reconnecting: "再接続中",
       timelineSyncFailed: "エージェントの履歴を更新できませんでした。再試行しています…",
       archivingTitle: "エージェントをアーカイブ中...",
       archivingSubtitle: "このエージェントをアーカイブするまでお待ちください。",
@@ -987,9 +989,14 @@ export const ja: TranslationResources = {
         host: "ホスト",
         changeRequest: "プルリクエスト",
         checks: "チェック",
-        scripts: "スクリプト",
+        services: "サービス",
         diff: "差分統計",
         timestamp: "最終アクティビティ",
+      },
+      checks: {
+        iconAndText: "アイコンとテキスト",
+        icon: "アイコンのみ",
+        none: "非表示",
       },
       hostFilter: {
         label: "ホスト",
@@ -1071,7 +1078,8 @@ export const ja: TranslationResources = {
     },
     workspace: {
       status: {
-        scriptsAvailable: "スクリプトが利用可能",
+        serviceRunning: "サービス {{name}} 実行中",
+        serviceUnhealthy: "サービス {{name}} 異常",
         creating: "作成中...",
       },
       actions: {
@@ -1133,14 +1141,29 @@ export const ja: TranslationResources = {
       composerStateRequired: "コンポーザーの状態が必要です",
       selectModel: "モデルを選択してください",
     },
+    tooltips: {
+      project: "Choose the project",
+      host: "Choose the host",
+      isolation: "Choose the isolation level",
+      startingRef: "開始点を選択",
+      launch: "Choose what to launch",
+    },
     refPicker: {
       startingRef: "開始Ref",
-      chooseStart: "開始点を選択",
       intoBase: "{{baseRef}}に",
       searching: "検索中...",
       noMatchingRefs: "一致するRefがありません。",
       searchPlaceholder: "ブランチとPRを検索",
       title: "開始点",
+    },
+    launch: {
+      title: "What to launch",
+      chat: "Chat",
+      terminal: "Terminal",
+      manageProfiles: "Manage profiles",
+      submit: "Launch",
+      promptPlaceholder: "Prompt {{name}}",
+      commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
   },
   desktop: {
@@ -1492,6 +1515,19 @@ export const ja: TranslationResources = {
         label: "詳細設定",
         show: "詳細設定を表示",
         hide: "詳細設定を非表示",
+      },
+      headers: {
+        title: "カスタムヘッダー",
+        add: "ヘッダーを追加",
+        name: "名前",
+        value: "値",
+        remove: "ヘッダーを削除",
+        errors: {
+          missingName: "各ヘッダーの名前を入力してください",
+          invalidName: "{{name}} は有効なヘッダー名ではありません",
+          invalidValue: "{{name}} に無効な改行が含まれています",
+          duplicateName: "{{name}} が複数回入力されています",
+        },
       },
       passwordVisibility: {
         show: "パスワードを表示",
@@ -1978,6 +2014,7 @@ export const ja: TranslationResources = {
           es: "スペイン語",
           fr: "フランス語",
           ja: "日本語",
+          ko: "韓国語",
           ptBR: "ブラジルポルトガル語",
           ru: "ロシア語",
           zhCN: "簡体字中国語",
